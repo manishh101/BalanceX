@@ -53,11 +53,19 @@ func (mon *Monitor) check(url string) {
 		defer resp.Body.Close()
 	}
 
-	if err != nil || resp.StatusCode != http.StatusOK {
+	if err != nil {
 		mon.metrics.SetHealth(url, false)
 		mon.breakers[url].RecordFailure()
 		mon.metrics.SetCircuitState(url, mon.breakers[url].State())
-		log.Printf("[MONITOR] %-30s DOWN ✗", url)
+		log.Printf("[MONITOR] %-30s DOWN ✗ (unreachable)", url)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		mon.metrics.SetHealth(url, false)
+		mon.breakers[url].RecordFailure()
+		mon.metrics.SetCircuitState(url, mon.breakers[url].State())
+		log.Printf("[MONITOR] %-30s DOWN ✗ (status %d)", url, resp.StatusCode)
 		return
 	}
 
