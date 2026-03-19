@@ -41,6 +41,8 @@
             --amber-border: #fde68a;
             --blue: #2563eb;
             --blue-light: #dbeafe;
+            --cyan: #0891b2;
+            --cyan-bg: #ecfeff;
             --radius: 12px;
             --radius-sm: 6px;
             --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -97,27 +99,50 @@
         .header-meta {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        .ws-badge {
+        .ws-badge, .feature-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
             padding: 5px 14px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 500;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .ws-badge {
             background: var(--red-bg);
             color: var(--red);
-            border: 1px solid var(--red-border);
-            transition: all 0.3s;
+            border-color: var(--red-border);
         }
 
         .ws-badge.live {
             background: var(--green-bg);
             color: var(--green);
             border-color: var(--green-border);
+        }
+
+        .feature-badge {
+            background: var(--accent-light);
+            color: var(--accent);
+            border-color: #c7d2fe;
+        }
+
+        .feature-badge.tls {
+            background: var(--cyan-bg);
+            color: var(--cyan);
+            border-color: #a5f3fc;
+        }
+
+        .feature-badge.auth {
+            background: var(--amber-bg);
+            color: var(--amber);
+            border-color: var(--amber-border);
         }
 
         .ws-dot {
@@ -136,7 +161,7 @@
         /* KPI cards */
         .kpi-row {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 12px;
             margin-bottom: 24px;
         }
@@ -175,6 +200,11 @@
 
         .kpi-value.red {
             color: var(--red);
+        }
+
+        .kpi-value.small {
+            font-size: 16px;
+            letter-spacing: 0;
         }
 
         /* Server cards grid */
@@ -402,10 +432,36 @@
             padding-top: 20px;
         }
 
+        .footer-features {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .footer-feature {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .footer-feature .dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .server-grid {
                 grid-template-columns: repeat(2, 1fr);
+            }
+            .kpi-row {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
 
@@ -457,6 +513,8 @@
                     <span class="ws-dot"></span>
                     <span id="ws-text">Offline</span>
                 </span>
+                <span class="feature-badge">Middleware Pipeline</span>
+                <span class="feature-badge auth">Auth Enabled</span>
                 <span id="clock" class="clock mono"></span>
             </div>
         </header>
@@ -478,6 +536,10 @@
             <div class="kpi">
                 <div class="kpi-label">Active Connections</div>
                 <div id="active-conn" class="kpi-value accent mono">0</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Avg Latency</div>
+                <div id="avg-latency" class="kpi-value mono small">—</div>
             </div>
         </div>
 
@@ -502,7 +564,19 @@
             <div id="priority-grid" class="priority-grid"></div>
         </div>
 
-        <div class="footer">Adaptive Routing · Fault Tolerance · Circuit Breaker</div>
+        <div class="footer">
+            <div>IOE Pulchowk Campus · BCT 2026 · Minor Project</div>
+            <div class="footer-features">
+                <span class="footer-feature"><span class="dot"></span>Middleware Pipeline</span>
+                <span class="footer-feature"><span class="dot"></span>Exponential Backoff</span>
+                <span class="footer-feature"><span class="dot"></span>JSON Access Logs</span>
+                <span class="footer-feature"><span class="dot"></span>Per-Server Health</span>
+                <span class="footer-feature"><span class="dot"></span>Canary Splitting</span>
+                <span class="footer-feature"><span class="dot"></span>Dashboard Auth</span>
+                <span class="footer-feature"><span class="dot"></span>Hot Reload</span>
+                <span class="footer-feature"><span class="dot"></span>TLS Support</span>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -587,7 +661,7 @@
 
         function update(servers) {
             const entries = Object.entries(servers);
-            let totalReq = 0, totalOK = 0, healthy = 0, active = 0;
+            let totalReq = 0, totalOK = 0, healthy = 0, active = 0, totalLat = 0, latCount = 0;
             const names = [], reqs = [];
 
             entries.forEach(([, s]) => {
@@ -597,12 +671,17 @@
                 if (s.is_healthy) healthy++;
                 names.push(s.name);
                 reqs.push(s.total_requests);
+                if (s.avg_latency_ms > 0) {
+                    totalLat += s.avg_latency_ms;
+                    latCount++;
+                }
             });
 
             document.getElementById('total-req').textContent = totalReq.toLocaleString();
             document.getElementById('success-rate').textContent = totalReq > 0 ? (totalOK / totalReq * 100).toFixed(1) + '%' : '—';
             document.getElementById('healthy-count').textContent = `${healthy} / ${entries.length}`;
             document.getElementById('active-conn').textContent = active;
+            document.getElementById('avg-latency').textContent = latCount > 0 ? (totalLat / latCount).toFixed(1) + 'ms' : '—';
 
             // Server cards
             document.getElementById('server-grid').innerHTML = entries.map(([url, s], i) => {
@@ -637,6 +716,10 @@
                         <div class="stat-row">
                             <span class="stat-label">Failures</span>
                             <span class="stat-value mono ${s.failure_count > 0 ? 'fail' : ''}">${s.failure_count}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Weight</span>
+                            <span class="stat-value mono">${s.weight}</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Circuit</span>

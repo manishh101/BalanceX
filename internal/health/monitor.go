@@ -4,73 +4,111 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
+	"intelligent-lb/config"
 	"intelligent-lb/internal/metrics"
 )
 
 // Monitor performs periodic health checks on all backend servers.
-// If a server fails, it updates metrics and the circuit breaker.
+// Each server can have its own health check configuration (path, interval,
+// timeout, expected status code), inspired by Traefik's per-service health checks.
 type Monitor struct {
-	servers  []string
+	servers  []config.ServerConfig
 	metrics  *metrics.Collector
 	breakers map[string]*Breaker
-	interval time.Duration
-	client   *http.Client
+	stopChs  []chan struct{}
+	mu       sync.Mutex
 }
 
 // NewMonitor creates a health monitor for the given servers.
-func NewMonitor(servers []string, m *metrics.Collector,
-	b map[string]*Breaker, interval time.Duration) *Monitor {
+// Each server runs its own independent health check goroutine with
+// its own interval, timeout, and expected status code.
+func NewMonitor(servers []config.ServerConfig, m *metrics.Collector,
+	b map[string]*Breaker) *Monitor {
 	return &Monitor{
 		servers:  servers,
 		metrics:  m,
 		breakers: b,
-		interval: interval,
-		client:   &http.Client{Timeout: 2 * time.Second},
 	}
 }
 
-// Start launches the background health check goroutine.
+// Start launches per-server health check goroutines.
 func (mon *Monitor) Start() {
-	go func() {
-		ticker := time.NewTicker(mon.interval)
-		log.Println("[MONITOR] Health checks started")
-		for range ticker.C {
-			for _, url := range mon.servers {
-				go mon.check(url)
+	mon.mu.Lock()
+	defer mon.mu.Unlock()
+
+	for _, s := range mon.servers {
+		stopCh := make(chan struct{})
+		mon.stopChs = append(mon.stopChs, stopCh)
+
+		server := s // capture loop variable
+		go func() {
+			interval := time.Duration(server.HealthCheck.IntervalSec) * time.Second
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			log.Printf("[MONITOR] Health checks started for %s (path=%s, interval=%ds, timeout=%ds, status=%d)",
+				server.Name, server.HealthCheck.Path, server.HealthCheck.IntervalSec,
+				server.HealthCheck.TimeoutSec, server.HealthCheck.ExpectedStatus)
+
+			for {
+				select {
+				case <-ticker.C:
+					mon.check(server)
+				case <-stopCh:
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
-// check performs a single health check against a server's /health endpoint.
-func (mon *Monitor) check(url string) {
-	resp, err := mon.client.Get(fmt.Sprintf("%s/health", url))
+// Stop halts all health check goroutines. Safe to call during hot reload.
+func (mon *Monitor) Stop() {
+	mon.mu.Lock()
+	defer mon.mu.Unlock()
 
-	// FIX B3: Guard against nil resp before calling Body.Close()
+	for _, ch := range mon.stopChs {
+		close(ch)
+	}
+	mon.stopChs = nil
+	log.Println("[MONITOR] All health check goroutines stopped")
+}
+
+// check performs a single health check against a server using its per-server config.
+func (mon *Monitor) check(server config.ServerConfig) {
+	client := &http.Client{
+		Timeout: time.Duration(server.HealthCheck.TimeoutSec) * time.Second,
+	}
+
+	url := fmt.Sprintf("%s%s", server.URL, server.HealthCheck.Path)
+	resp, err := client.Get(url)
+
 	if resp != nil {
 		defer resp.Body.Close()
 	}
 
 	if err != nil {
-		mon.metrics.SetHealth(url, false)
-		mon.breakers[url].RecordFailure()
-		mon.metrics.SetCircuitState(url, mon.breakers[url].State())
-		log.Printf("[MONITOR] %-30s DOWN ✗ (unreachable)", url)
+		mon.metrics.SetHealth(server.URL, false)
+		mon.breakers[server.URL].RecordFailure()
+		mon.metrics.SetCircuitState(server.URL, mon.breakers[server.URL].State())
+		log.Printf("[MONITOR] %-20s %-10s DOWN ✗ (unreachable)", server.Name, server.URL)
 		return
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		mon.metrics.SetHealth(url, false)
-		mon.breakers[url].RecordFailure()
-		mon.metrics.SetCircuitState(url, mon.breakers[url].State())
-		log.Printf("[MONITOR] %-30s DOWN ✗ (status %d)", url, resp.StatusCode)
+	if resp.StatusCode != server.HealthCheck.ExpectedStatus {
+		mon.metrics.SetHealth(server.URL, false)
+		mon.breakers[server.URL].RecordFailure()
+		mon.metrics.SetCircuitState(server.URL, mon.breakers[server.URL].State())
+		log.Printf("[MONITOR] %-20s %-10s DOWN ✗ (status %d, expected %d)",
+			server.Name, server.URL, resp.StatusCode, server.HealthCheck.ExpectedStatus)
 		return
 	}
 
-	mon.metrics.SetHealth(url, true)
-	mon.breakers[url].RecordSuccess()
-	mon.metrics.SetCircuitState(url, mon.breakers[url].State())
-	log.Printf("[MONITOR] %-30s UP   ✓", url)
+	mon.metrics.SetHealth(server.URL, true)
+	mon.breakers[server.URL].RecordSuccess()
+	mon.metrics.SetCircuitState(server.URL, mon.breakers[server.URL].State())
+	log.Printf("[MONITOR] %-20s %-10s UP   ✓", server.Name, server.URL)
 }

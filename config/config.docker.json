@@ -8,30 +8,68 @@
   "metrics_interval_sec": 10,
   "max_retries": 3,
   "shutdown_timeout_sec": 15,
+  "rate_limit_rps": 100,
+  "rate_limit_burst": 200,
+  "per_attempt_timeout_sec": 5,
+  "retry_backoff_ms": 100,
+  "retry_backoff_max_ms": 5000,
+  "access_log_path": "/app/access.log",
+  "hot_reload": false,
+  "dashboard_auth": {
+    "username": "admin",
+    "password": "loadbalancer"
+  },
+  "tls": {
+    "enabled": false
+  },
   "servers": [
     {
       "url": "http://alpha:8001",
       "name": "Alpha",
       "weight": 5,
-      "delay_ms": 15
+      "delay_ms": 15,
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 5,
+        "timeout_sec": 2,
+        "expected_status": 200
+      }
     },
     {
       "url": "http://beta:8002",
       "name": "Beta",
       "weight": 3,
-      "delay_ms": 50
+      "delay_ms": 50,
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 10,
+        "timeout_sec": 3,
+        "expected_status": 200
+      }
     },
     {
       "url": "http://gamma:8003",
       "name": "Gamma",
       "weight": 1,
-      "delay_ms": 100
+      "delay_ms": 100,
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 15,
+        "timeout_sec": 2,
+        "expected_status": 200
+      }
     },
     {
       "url": "http://delta:8004",
       "name": "Delta",
       "weight": 4,
-      "delay_ms": 20
+      "delay_ms": 20,
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 5,
+        "timeout_sec": 2,
+        "expected_status": 200
+      }
     }
   ]
 }
