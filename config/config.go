@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
@@ -23,6 +24,19 @@ type ServerConfig struct {
 	HealthCheck HealthCheckConfig `json:"health_check,omitempty"` // Per-server health check config
 }
 
+// RouterConfig holds configuration for a single rule-based router.
+type RouterConfig struct {
+	Rule        string   `json:"rule"`
+	Priority    int      `json:"priority"`
+	Middlewares []string `json:"middlewares,omitempty"`
+	Service     string   `json:"service"`
+}
+
+// ServiceConfig holds configuration for a backend service (a grouping of servers).
+type ServiceConfig struct {
+	Servers []ServerConfig `json:"servers"`
+}
+
 // DashboardAuth holds basic authentication credentials for the dashboard.
 // If both fields are empty, authentication is disabled (backward compatible).
 type DashboardAuth struct {
@@ -37,6 +51,17 @@ type TLSConfig struct {
 	CertFile     string `json:"cert_file,omitempty"`
 	KeyFile      string `json:"key_file,omitempty"`
 	AutoGenerate bool   `json:"auto_generate,omitempty"` // Generate self-signed cert if files don't exist
+}
+
+// EntryPointConfig defines a single named entrypoint.
+// Each entrypoint runs as its own independent HTTP server with its own
+// goroutine, middleware chain, and connection handling.
+// Inspired by Traefik's EntryPoint configuration in pkg/config/static/entrypoints.go.
+type EntryPointConfig struct {
+	Address     string     `json:"address"`               // Listen address, e.g. ":8080"
+	Protocol    string     `json:"protocol,omitempty"`     // "http" (default), "https"
+	Middlewares []string   `json:"middlewares,omitempty"`  // Entrypoint-level middleware names
+	TLS         *TLSConfig `json:"tls,omitempty"`          // Optional per-entrypoint TLS config
 }
 
 // CORSConfig holds CORS configuration for the middleware.
@@ -70,6 +95,17 @@ type Config struct {
 	TLS               TLSConfig     `json:"tls,omitempty"`
 	CORS              CORSConfig    `json:"cors,omitempty"`
 	HotReload         bool          `json:"hot_reload,omitempty"`
+
+	// EntryPoints defines named entrypoints, each running as an independent server.
+	// If not specified, entrypoints are synthesized from listen_port and dashboard_port.
+	// Inspired by Traefik's EntryPoints configuration.
+	EntryPoints map[string]*EntryPointConfig `json:"entrypoints,omitempty"`
+
+	// Routers define rule-based request routing.
+	Routers map[string]*RouterConfig `json:"routers,omitempty"`
+
+	// Services define named groups of backend servers.
+	Services map[string]*ServiceConfig `json:"services,omitempty"`
 }
 
 // Load reads and parses a JSON configuration file.
@@ -134,7 +170,7 @@ func setDefaults(cfg *Config) {
 		cfg.AccessLogPath = "access.log"
 	}
 
-	// Apply per-server health check defaults
+	// Apply per-server health check defaults for legacy global servers
 	for i := range cfg.Servers {
 		s := &cfg.Servers[i]
 		if s.HealthCheck.Path == "" {
@@ -148,6 +184,56 @@ func setDefaults(cfg *Config) {
 		}
 		if s.HealthCheck.ExpectedStatus == 0 {
 			s.HealthCheck.ExpectedStatus = 200
+		}
+	}
+
+	// Apply health check and weight defaults for named services
+	for _, svc := range cfg.Services {
+		for i := range svc.Servers {
+			s := &svc.Servers[i]
+			if s.Weight == 0 {
+				s.Weight = 1
+			}
+			if s.HealthCheck.Path == "" {
+				s.HealthCheck.Path = "/health"
+			}
+			if s.HealthCheck.IntervalSec == 0 {
+				s.HealthCheck.IntervalSec = cfg.HealthInterval
+			}
+			if s.HealthCheck.TimeoutSec == 0 {
+				s.HealthCheck.TimeoutSec = 2
+			}
+			if s.HealthCheck.ExpectedStatus == 0 {
+				s.HealthCheck.ExpectedStatus = 200
+			}
+		}
+	}
+
+	// Backward compatibility: synthesize entrypoints from legacy listen_port/dashboard_port
+	// if the new entrypoints block is not present. This mirrors Traefik's default entrypoint
+	// generation when no explicit entrypoints are configured.
+	if len(cfg.EntryPoints) == 0 {
+		cfg.EntryPoints = map[string]*EntryPointConfig{
+			"web": {
+				Address:  fmt.Sprintf(":%d", cfg.ListenPort),
+				Protocol: "http",
+			},
+			"dashboard": {
+				Address:  fmt.Sprintf(":%d", cfg.DashboardPort),
+				Protocol: "http",
+			},
+		}
+		// Inherit global TLS config for the web entrypoint if enabled
+		if cfg.TLS.Enabled {
+			cfg.EntryPoints["web"].Protocol = "https"
+			cfg.EntryPoints["web"].TLS = &cfg.TLS
+		}
+	}
+
+	// Apply entrypoint defaults
+	for _, ep := range cfg.EntryPoints {
+		if ep.Protocol == "" {
+			ep.Protocol = "http"
 		}
 	}
 }

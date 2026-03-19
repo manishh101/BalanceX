@@ -22,6 +22,7 @@
   - [6. Metrics Collector](#6-metrics-collector)
   - [7. Real-time Dashboard](#7-real-time-dashboard)
 - [Request Lifecycle](#request-lifecycle)
+- [Entrypoints](#entrypoints)
 - [Configuration](#configuration)
 - [Quick Start](#quick-start)
   - [Local Development](#local-development)
@@ -125,6 +126,9 @@ intelligent-lb/
 │   ├── health/
 │   │   ├── monitor.go           # Periodic health check goroutine
 │   │   └── breaker.go           # Three-state circuit breaker
+│   ├── entrypoint/
+│   │   ├── entrypoint.go        # Named entrypoint lifecycle management (Traefik-inspired)
+│   │   └── entrypoint_test.go   # Entrypoint unit tests
 │   ├── metrics/
 │   │   ├── collector.go         # Thread-safe metrics storage
 │   │   └── reporter.go          # Terminal metrics table printer
@@ -344,14 +348,98 @@ A WebSocket-powered monitoring dashboard that broadcasts metrics snapshots every
 
 ---
 
+## Entrypoints
+
+Inspired by [Traefik's EntryPoints](https://doc.traefik.io/traefik/routing/entrypoints/), each entrypoint runs as its own **independent HTTP server** with its own goroutine, middleware chain, and connection handling. Failure of one entrypoint does not affect others.
+
+### Configuration
+
+Add an `entrypoints` block to `config/config.json`:
+
+```json
+{
+  "entrypoints": {
+    "web": {
+      "address": ":8080",
+      "protocol": "http",
+      "middlewares": ["headers", "cors", "rate-limit"]
+    },
+    "admin": {
+      "address": ":8082",
+      "protocol": "http",
+      "middlewares": ["basic-auth"]
+    },
+    "dashboard": {
+      "address": ":8081",
+      "protocol": "http",
+      "middlewares": ["basic-auth"]
+    }
+  }
+}
+```
+
+### Entrypoint Fields
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `address` | Yes | — | Listen address (e.g. `:8080`, `0.0.0.0:9090`) |
+| `protocol` | No | `http` | Protocol: `http` or `https` |
+| `middlewares` | No | `[]` | List of middleware names applied to all traffic on this entrypoint |
+| `tls` | No | — | Per-entrypoint TLS config (`cert_file`, `key_file`, etc.) |
+
+### Available Middlewares
+
+| Name | Description |
+|------|-------------|
+| `rate-limit` | Per-IP rate limiting (configured via `rate_limit_rps` and `rate_limit_burst`) |
+| `headers` | Request header enrichment: `X-Forwarded-For`, `X-Real-IP`, `X-Request-ID` |
+| `cors` | CORS headers + preflight `OPTIONS` handling |
+| `basic-auth` | HTTP Basic Authentication (configured via `dashboard_auth`) |
+
+### Backward Compatibility
+
+If the `entrypoints` block is **not present**, entrypoints are automatically synthesized from the legacy `listen_port` and `dashboard_port` fields:
+
+```
+listen_port: 8080     →  entrypoint "web"       on :8080
+dashboard_port: 8081  →  entrypoint "dashboard" on :8081
+```
+
+Old config files continue to work without any changes.
+
+### Graceful Shutdown
+
+On `SIGTERM` or `Ctrl+C`, all entrypoints stop accepting new connections, drain in-flight requests, then exit cleanly using `http.Server.Shutdown()` with a 30-second timeout.
+
+### HTTPS per Entrypoint
+
+```json
+{
+  "entrypoints": {
+    "websecure": {
+      "address": ":8443",
+      "protocol": "https",
+      "tls": {
+        "cert_file": "server.crt",
+        "key_file": "server.key"
+      }
+    }
+  }
+}
+```
+
+---
+
 ## Configuration
 
 Edit `config/config.json`:
 
 ```json
 {
-  "listen_port": 8080,
-  "dashboard_port": 8081,
+  "entrypoints": {
+    "web": { "address": ":8080", "protocol": "http", "middlewares": ["headers", "cors", "rate-limit"] },
+    "dashboard": { "address": ":8081", "protocol": "http", "middlewares": ["basic-auth"] }
+  },
   "algorithm": "weighted",
   "health_interval_sec": 5,
   "breaker_threshold": 3,
@@ -368,13 +456,15 @@ Edit `config/config.json`:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `listen_port` | 8080 | Port for the reverse proxy |
-| `dashboard_port` | 8081 | Port for the monitoring dashboard |
-| `algorithm` | `weighted` | Routing algorithm: `weighted`, `roundrobin`, or `leastconn` |
+| `entrypoints` | auto | Named entrypoints (see [Entrypoints](#entrypoints)) |
+| `listen_port` | 8080 | Legacy: port for the reverse proxy (used if no `entrypoints`) |
+| `dashboard_port` | 8081 | Legacy: port for the dashboard (used if no `entrypoints`) |
+| `algorithm` | `weighted` | Routing algorithm: `weighted`, `roundrobin`, `leastconn`, or `canary` |
 | `health_interval_sec` | 5 | Seconds between health checks |
 | `breaker_threshold` | 3 | Consecutive failures before circuit opens |
 | `breaker_timeout_sec` | 15 | Seconds before attempting recovery (OPEN→HALF_OPEN) |
 | `metrics_interval_sec` | 10 | Seconds between terminal metrics table prints |
+| `shutdown_timeout_sec` | 15 | Seconds to wait during graceful shutdown |
 
 ---
 

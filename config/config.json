@@ -1,4 +1,16 @@
 {
+  "entrypoints": {
+    "web": {
+      "address": ":8080",
+      "protocol": "http",
+      "middlewares": ["headers", "cors", "rate-limit"]
+    },
+    "dashboard": {
+      "address": ":8081",
+      "protocol": "http",
+      "middlewares": ["basic-auth"]
+    }
+  },
   "listen_port": 8080,
   "dashboard_port": 8081,
   "algorithm": "weighted",
