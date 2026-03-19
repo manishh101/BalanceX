@@ -256,6 +256,13 @@ func (m *Manager) DashboardSnap() metrics.DashboardSnapshot {
 	}
 }
 
+// GetConfig returns the underlying global configuration used by the manager.
+func (m *Manager) GetConfig() *config.Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cfg
+}
+
 // Stop stops all health monitors for all service instances.
 func (m *Manager) Stop() {
 	m.mu.Lock()

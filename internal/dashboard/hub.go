@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"intelligent-lb/config"
 	"intelligent-lb/internal/metrics"
 )
 
@@ -23,6 +24,7 @@ const historySize = 120 // 2 minutes at 1-second intervals
 // or an aggregated view from the service manager.
 type SnapshotProvider interface {
 	DashboardSnap() metrics.DashboardSnapshot
+	GetConfig() *config.Config
 }
 
 // Hub manages WebSocket connections, broadcasts metrics, stores history,
@@ -123,6 +125,17 @@ func (h *Hub) HandleAPIHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(h.history)
+}
+
+// HandleAPIConfig serves GET /api/config — returns the current full configuration.
+func (h *Hub) HandleAPIConfig(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	cfg := h.provider.GetConfig()
+	h.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(cfg)
 }
 
 // HandleAPIHealth serves GET /api/health — 200 if at least one backend healthy,

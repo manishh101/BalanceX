@@ -122,6 +122,7 @@ func main() {
 			dashMux.Handle("/api/metrics", http.HandlerFunc(hub.HandleAPIMetrics))
 			dashMux.Handle("/api/history", http.HandlerFunc(hub.HandleAPIHistory))
 			dashMux.Handle("/api/health", http.HandlerFunc(hub.HandleAPIHealth))
+			dashMux.Handle("/api/config", http.HandlerFunc(hub.HandleAPIConfig))
 			dashMux.Handle("/stats", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				snap := state.svcMgr.DashboardSnap()

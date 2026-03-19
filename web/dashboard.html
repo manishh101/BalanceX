@@ -1,772 +1,777 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intelligent Load Balancer — Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <meta charset="UTF-8">
+  <title>ILB Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #f5f5f5;
+      --nav-bg: #1a1a2e;
+      --card-bg: #ffffff;
+      --teal-primary: #00ADB5;
+      --teal-success: #00ADB5;
+      --amber-warning: #F5A623;
+      --red-error: #E74C3C;
+      --text-primary: #1a1a2e;
+      --text-secondary: #666666;
+      --font-body: 'IBM Plex Sans', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+      --off-bg: #FFCDD2;
+      --off-text: #E74C3C;
+      --border-color: #e2e8f0;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    /* Top Navbar */
+    .navbar {
+      background-color: var(--nav-bg);
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      margin-right: 48px;
+    }
+    .logo-icon {
+      margin-right: 8px;
+      color: var(--teal-primary);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .badge {
+      background: rgba(255,255,255,0.1);
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 12px;
+      font-weight: 500;
+      color: #ccc;
+    }
+    
+    .nav-tabs {
+      display: flex;
+      list-style: none;
+      height: 100%;
+    }
+    .nav-tabs li {
+      height: 100%;
+    }
+    .nav-tabs button {
+      background: transparent;
+      border: none;
+      color: #a0aec0;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 0 20px;
+      height: 100%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .nav-tabs button:hover { color: white; }
+    .nav-tabs button.active {
+      color: white;
+      border-bottom-color: var(--teal-primary);
+    }
+    
+    .nav-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .pill {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .pill.live { background: var(--teal-success); color: white; }
+    .pill.offline { background: var(--red-error); color: white; }
+    
+    .clock {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: #a0aec0;
+    }
 
-        :root {
-            /* Dark Terminal Theme */
-            --bg: #0a0e17;
-            --bg-card: #111827;
-            --bg-card-hover: #1f2937;
-            --border: #1e293b;
-            --border-light: #334155;
-            --text: #f8fafc;
-            --text-secondary: #cbd5e1;
-            --text-tertiary: #64748b;
-            --accent: #60a5fa;
-            --accent-light: rgba(96, 165, 250, 0.1);
-            --green: #4ade80;
-            --green-bg: rgba(74, 222, 128, 0.1);
-            --green-border: rgba(74, 222, 128, 0.2);
-            --red: #f87171;
-            --red-bg: rgba(248, 113, 113, 0.1);
-            --red-border: rgba(248, 113, 113, 0.2);
-            --amber: #fbbf24;
-            --amber-bg: rgba(251, 191, 36, 0.1);
-            --amber-border: rgba(251, 191, 36, 0.2);
-            --cyan: #22d3ee;
-            --cyan-bg: rgba(34, 211, 238, 0.1);
-            --radius: 8px;
-            --radius-sm: 4px;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-            
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'IBM Plex Mono', monospace;
-        }
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+    
+    /* Sections */
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title i { font-style: normal; font-weight: bold; }
+    
+    /* Layouts */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .ep-card { align-items: center; justify-content: center; min-height: 120px; }
+    .ep-label { font-size: 14px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; margin-bottom: 12px; letter-spacing: 1px;}
+    .ep-port { font-family: var(--font-mono); font-size: 32px; font-weight: 600; }
+    
+    /* Donut Cards */
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .card-title { font-size: 16px; font-weight: 600; }
+    .explore-btn {
+      color: #3182CE;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      display: flex;
+      align-items: center;
+    }
+    .explore-btn:hover { text-decoration: underline; }
+    
+    .card-body {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chart-box {
+      width: 120px;
+      height: 120px;
+      position: relative;
+    }
+    .chart-center-text {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+    
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+      margin-left: 24px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .legend-icon {
+      width: 20px; height: 20px; border-radius: 4px; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; font-style: normal;
+    }
+    .icon-success { background: var(--teal-success); }
+    .icon-warning { background: var(--amber-warning); }
+    .icon-error { background: var(--red-error); }
+    
+    .legend-text { flex: 1; display: flex; flex-direction: column; }
+    .legend-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .legend-pct { font-size: 12px; color: var(--text-secondary); }
+    .legend-val { font-family: var(--font-mono); font-size: 18px; font-weight: 600; }
 
-        body {
-            font-family: var(--font-sans);
-            background: var(--bg);
-            color: var(--text);
-            -webkit-font-smoothing: antialiased;
-            line-height: 1.5;
-            min-height: 100vh;
-        }
+    /* Inline Tables Container */
+    .explore-container { display: none; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 24px; }
+    .explore-container.open { display: block; animation: slideDown 0.3s ease-out forwards; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .mono {
-            font-family: var(--font-mono);
-        }
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    th { padding: 12px 16px; border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; white-space: nowrap; }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+    .mono { font-family: var(--font-mono); }
+    
+    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .status-success { background: rgba(0,173,181,0.1); color: var(--teal-success); }
+    .status-warning { background: rgba(245,166,35,0.1); color: var(--amber-warning); }
+    .status-error { background: rgba(231,76,60,0.1); color: var(--red-error); }
+    .status-outline { border: 1px solid #dcdcdc; color: var(--text-secondary); }
 
-        .shell {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 24px 24px 48px;
-        }
+    /* Features Grid */
+    .features-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 48px; }
+    .feature-card { background: var(--card-bg); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 24px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+    .feature-title { font-size: 12px; letter-spacing: 1px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; text-align: center; }
+    .feature-state { font-size: 18px; font-weight: bold; padding: 6px 20px; border-radius: 8px; }
+    .feature-state.on { background: rgba(0,173,181,0.15); color: var(--teal-success); }
+    .feature-state.off { background: var(--off-bg); color: var(--off-text); }
 
-        /* Header */
-        .header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 24px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-        }
+    /* Metrics Bar */
+    .metrics-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; margin-bottom: 48px; }
+    .metric-card { background: var(--card-bg); border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 8px; }
+    .metric-title { font-size: 13px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; }
+    .metric-value { font-family: var(--font-mono); font-size: 32px; font-weight: 600; color: var(--teal-primary); }
 
-        .header-left {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
+    /* RPS Chart */
+    .large-chart-card { background: var(--card-bg); border-radius: 8px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); height: 350px; margin-bottom: 48px; }
 
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            text-transform: uppercase;
-            font-family: var(--font-mono);
-            color: #fff;
-        }
-
-        .header-subtitle {
-            font-size: 13px;
-            color: var(--text-tertiary);
-            font-family: var(--font-mono);
-        }
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-family: var(--font-mono);
-            font-weight: 500;
-            border: 1px solid var(--border);
-            text-transform: uppercase;
-        }
-
-        .badge.ws-unconnected {
-            background: var(--red-bg);
-            color: var(--red);
-            border-color: var(--red-border);
-        }
-
-        .badge.ws-live {
-            background: var(--green-bg);
-            color: var(--green);
-            border-color: var(--green-border);
-        }
-
-        .badge.neutral {
-            background: var(--accent-light);
-            color: var(--accent);
-            border-color: rgba(96, 165, 250, 0.2);
-        }
-
-        .badge .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-        .ws-live .dot {
-            animation: pulse-green 2s infinite ease-out;
-            box-shadow: 0 0 8px currentColor;
-        }
-
-        @keyframes pulse-green {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
-
-        .clock {
-            font-size: 14px;
-            color: var(--accent);
-            background: rgba(0,0,0,0.3);
-            padding: 4px 12px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-        }
-
-        /* KPIs */
-        .kpi-row {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .kpi {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            box-shadow: var(--shadow);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .kpi::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 4px; height: 100%;
-            background: var(--border-light);
-        }
-        .kpi.accent::before { background: var(--accent); }
-        .kpi.green::before { background: var(--green); }
-        .kpi.amber::before { background: var(--amber); }
-
-        .kpi-label {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: var(--text-tertiary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .kpi-value {
-            font-family: var(--font-mono);
-            font-size: 26px;
-            font-weight: 400;
-            color: var(--text);
-        }
-
-        .kpi-value.green { color: var(--green); }
-        .kpi-value.accent { color: var(--accent); }
-        .kpi-value.amber { color: var(--amber); }
-        .kpi-value.red { color: var(--red); }
-        
-        .kpi-sub {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: var(--text-tertiary);
-            margin-top: 4px;
-        }
-
-        /* Server Grid */
-        .section-title {
-            font-family: var(--font-mono);
-            font-size: 14px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            margin-bottom: 16px;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .section-title::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
-
-        .server-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-
-        .server-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            box-shadow: var(--shadow);
-            transition: transform 0.2s, border-color 0.2s;
-        }
-        .server-card:hover {
-            border-color: var(--border-light);
-            transform: translateY(-2px);
-        }
-
-        .server-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .server-name {
-            font-family: var(--font-mono);
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-family: var(--font-mono);
-            font-size: 10px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-badge.up { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
-        .status-badge.down { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
-
-        .server-stats {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .server-stats table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .server-stats td {
-            padding: 4px 0;
-            font-family: var(--font-mono);
-        }
-        
-        .server-stats td:first-child {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-        
-        .server-stats td:last-child {
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-align: right;
-        }
-
-        .stat-value.fail { color: var(--red); }
-        .stat-value.muted { color: var(--text-tertiary); font-size: 11px; }
-
-        .circuit-tag {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            border: 1px solid transparent;
-        }
-        .circuit-tag.closed { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
-        .circuit-tag.open { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
-        .circuit-tag.half { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border); }
-
-        .pri-group {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 6px;
-        }
-        .pri-h { color: var(--amber); }
-        .pri-l { color: var(--cyan); }
-        .pri-sep { color: var(--text-tertiary); }
-
-        /* Charts & Logs Area */
-        .bottom-area {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        .chart-container, .log-container {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            box-shadow: var(--shadow);
-        }
-
-        .charts-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 24px;
-        }
-        
-        .chart-section {
-            height: 200px;
-            position: relative;
-        }
-
-        .log-list {
-            list-style: none;
-            overflow-y: auto;
-            max-height: 424px;
-            padding-right: 8px;
-        }
-        
-        .log-list::-webkit-scrollbar { width: 4px; }
-        .log-list::-webkit-scrollbar-track { background: var(--bg); }
-        .log-list::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
-
-        .log-item {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            padding: 8px 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            display: grid;
-            grid-template-columns: 80px auto;
-            gap: 12px;
-        }
-        
-        .log-item:last-child { border-bottom: none; }
-        
-        .log-time { color: var(--text-tertiary); }
-        .log-msg { color: var(--text-secondary); }
-        
-        .log-highlight { color: #fff; font-weight: 500; }
-        .state-OPEN { color: var(--red); }
-        .state-HALF_OPEN { color: var(--amber); }
-        .state-CLOSED { color: var(--green); }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--text-tertiary);
-            padding-top: 32px;
-            border-top: 1px solid var(--border);
-            margin-top: 24px;
-        }
-
-        .api-links {
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            margin-top: 12px;
-        }
-        
-        .api-links a {
-            color: var(--accent);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-        .api-links a:hover {
-            color: #fff;
-            text-decoration: underline;
-        }
-        
-        /* Responsive */
-        @media (max-width: 1200px) {
-            .kpi-row { grid-template-columns: repeat(3, 1fr); }
-            .bottom-area { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 768px) {
-            .kpi-row { grid-template-columns: repeat(2, 1fr); }
-            .header { flex-direction: column; align-items: stretch; gap: 16px; }
-            .header-meta { justify-content: flex-start; }
-            .server-grid { grid-template-columns: 1fr; }
-        }
-    </style>
+    /* Tab Views */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .fullscreen-table-card { background: var(--card-bg); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 24px; min-height: 500px; margin-bottom: 48px; overflow-x: auto;}
+    
+  </style>
 </head>
-
 <body>
-    <div class="shell">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <h1>Intelligent Load Balancer</h1>
-                <span class="header-subtitle">Traffic Control & Observer Dashboard</span>
-            </div>
-            <div class="header-meta">
-                <span id="ws-badge" class="badge ws-unconnected">
-                    <span class="dot"></span>
-                    <span id="ws-text">Connecting...</span>
-                </span>
-                <span class="badge neutral" id="algo-badge">Algorithm: —</span>
-                <span id="clock" class="clock mono">00:00:00</span>
-            </div>
-        </header>
 
-        <!-- KPIs -->
-        <div class="kpi-row">
-            <div class="kpi accent">
-                <div class="kpi-label">RPS</div>
-                <div id="global-rps" class="kpi-value mono">0.0</div>
-                <div class="kpi-sub">Requests Per Second</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-label">Total Requests</div>
-                <div id="total-req" class="kpi-value mono">0</div>
-                <div class="kpi-sub">Lifetime served</div>
-            </div>
-            <div class="kpi green">
-                <div class="kpi-label">Success Rate</div>
-                <div id="success-rate" class="kpi-value mono">—</div>
-                <div class="kpi-sub">200-399 range</div>
-            </div>
-            <div class="kpi amber">
-                <div class="kpi-label">Active Conns</div>
-                <div id="active-conn" class="kpi-value mono">0</div>
-                <div class="kpi-sub">Currently in-flight</div>
-            </div>
-            <div class="kpi">
-                <div class="kpi-label">Healthy Nodes</div>
-                <div id="healthy-count" class="kpi-value mono">0 / 0</div>
-                <div class="kpi-sub">Passing health checks</div>
-            </div>
-            <div class="kpi red">
-                <div class="kpi-label">Circuit Events</div>
-                <div id="circuit-kpi" class="kpi-value mono">0</div>
-                <div class="kpi-sub">State transitions</div>
-            </div>
+  <nav class="navbar">
+    <div class="logo">
+      <span class="logo-icon">ILB</span> Dashboard <span class="badge">v1.0.0</span>
+    </div>
+    <ul class="nav-tabs" id="mainTabs">
+      <li><button class="active" data-target="dashboard">Dashboard</button></li>
+      <li><button data-target="routers">Routers</button></li>
+      <li><button data-target="services">Services</button></li>
+      <li><button data-target="middlewares">Middlewares</button></li>
+      <li><button data-target="backends">Backends</button></li>
+    </ul>
+    <div class="nav-right">
+      <div id="connection-pill" class="pill offline">Offline</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </nav>
+
+  <div class="container">
+    
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard" class="tab-content active">
+      
+      <!-- Entrypoints -->
+      <div class="section-title"><i>➔]</i> Entrypoints</div>
+      <div class="grid-3" id="entrypoints-container">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- HTTP Section -->
+      <div class="section-title"><i>🌐</i> HTTP</div>
+      <div class="grid-3">
+        <!-- Routers Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Routers</span>
+            <button class="explore-btn" onclick="toggleExplore(this, 'table-routers')">Explore &rarr;</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-routers"></canvas><div class="chart-center-text" id="center-routers">0</div></div>
+            <div class="legend" id="legend-routers"></div>
+          </div>
+          <div class="explore-container">
+            <table id="table-routers">
+              <thead><tr><th>Name</th><th>Rule</th><th>Priority</th><th>Middlewares</th><th>Service</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Server Grid -->
-        <div class="section-title">Backend Nodes</div>
-        <div id="server-grid" class="server-grid"></div>
-
-        <!-- Bottom Area: Charts and Logs -->
-        <div class="bottom-area">
-            <div class="chart-container">
-                <div class="section-title">Telemetry</div>
-                <div class="charts-grid">
-                    <div class="chart-section">
-                        <canvas id="rpsChart"></canvas>
-                    </div>
-                    <div class="chart-section">
-                        <canvas id="latencyChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="log-container">
-                <div class="section-title">Circuit Breaker Events</div>
-                <ul id="event-log" class="log-list">
-                    <li><div style="padding:16px; color:#64748b; font-size:12px; font-family:monospace">Waiting for events...</div></li>
-                </ul>
-            </div>
+        <!-- Services Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Services</span>
+            <button class="explore-btn" onclick="toggleExplore(this, 'table-services')">Explore &rarr;</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-services"></canvas><div class="chart-center-text" id="center-services">0</div></div>
+            <div class="legend" id="legend-services"></div>
+          </div>
+          <div class="explore-container">
+            <table id="table-services">
+              <thead><tr><th>Name</th><th>Servers</th><th>Algorithm</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Footer -->
-        <div class="footer">
-            <p>IOE Pulchowk Campus · Post-Graduate Load Balancer implementation (2026)</p>
-            <div class="api-links">
-                <a href="/api/metrics" target="_blank">[GET /api/metrics]</a>
-                <a href="/api/history" target="_blank">[GET /api/history]</a>
-                <a href="/api/health" target="_blank">[GET /api/health]</a>
-            </div>
+        <!-- Middlewares Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Middlewares</span>
+            <button class="explore-btn" onclick="toggleExplore(this, 'table-middlewares')">Explore &rarr;</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-middlewares"></canvas><div class="chart-center-text" id="center-middlewares">0</div></div>
+            <div class="legend" id="legend-middlewares"></div>
+          </div>
+          <div class="explore-container">
+            <table id="table-middlewares">
+              <thead><tr><th>Name</th><th>Type</th><th>Config Summary</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
+      </div>
+
+      <!-- Backends Section -->
+      <div class="section-title"><i>📦</i> Backends</div>
+      <div class="grid-3">
+        <!-- Servers Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Servers</span>
+            <button class="explore-btn" onclick="toggleExplore(this, 'table-servers')">Explore &rarr;</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-servers"></canvas><div class="chart-center-text" id="center-servers">0</div></div>
+            <div class="legend" id="legend-servers"></div>
+          </div>
+          <div class="explore-container" style="overflow-x:auto">
+            <table id="table-servers">
+              <thead><tr><th>Name</th><th>URL</th><th>Status</th><th>Circuit</th><th>Avg ms</th><th>P95 ms</th><th>Active</th><th>Total</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Circuit Breakers Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Circuit Breakers</span>
+            <button class="explore-btn" onclick="toggleExplore(this, 'table-circuits')">Explore &rarr;</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-circuits"></canvas><div class="chart-center-text" id="center-circuits">0</div></div>
+            <div class="legend" id="legend-circuits"></div>
+          </div>
+          <div class="explore-container">
+            <table id="table-circuits">
+              <thead><tr><th>Time</th><th>Server</th><th>Transition</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Priority Traffic Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Priority Traffic</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-box"><canvas id="donut-priority"></canvas></div>
+            <div class="legend" id="legend-priority"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Section -->
+      <div class="section-title"><i>⚙</i> Features</div>
+      <div class="features-grid" id="features-container"></div>
+
+      <!-- Real-Time Metrics -->
+      <div class="section-title"><i>📈</i> Real-Time Metrics</div>
+      <div class="metrics-bar">
+        <div class="metric-card"><span class="metric-title">Total Requests</span><span class="metric-value" id="kpi-total">0</span></div>
+        <div class="metric-card"><span class="metric-title">Success Rate %</span><span class="metric-value" id="kpi-success">0</span></div>
+        <div class="metric-card"><span class="metric-title">Global RPS</span><span class="metric-value" id="kpi-rps">0</span></div>
+        <div class="metric-card"><span class="metric-title">Healthy Servers</span><span class="metric-value" id="kpi-healthy">0/0</span></div>
+        <div class="metric-card"><span class="metric-title">Active Connections</span><span class="metric-value" id="kpi-active">0</span></div>
+      </div>
+
+      <!-- RPS Chart -->
+      <div class="large-chart-card">
+        <canvas id="rps-line-chart"></canvas>
+      </div>
+
+    </div> <!-- End Dashboard View -->
+
+    <!-- FULLSCREEN VIEWS -->
+    <div id="view-routers" class="tab-content">
+      <div class="section-title">Routers Explorer</div>
+      <div class="fullscreen-table-card"><table id="fs-table-routers" style="width:100%"></table></div>
+    </div>
+    <div id="view-services" class="tab-content">
+      <div class="section-title">Services Explorer</div>
+      <div class="fullscreen-table-card"><table id="fs-table-services" style="width:100%"></table></div>
+    </div>
+    <div id="view-middlewares" class="tab-content">
+      <div class="section-title">Middlewares Explorer</div>
+      <div class="fullscreen-table-card"><table id="fs-table-middlewares" style="width:100%"></table></div>
+    </div>
+    <div id="view-backends" class="tab-content">
+      <div class="section-title">Backends Explorer</div>
+      <div class="fullscreen-table-card"><table id="fs-table-servers" style="width:100%"></table></div>
     </div>
 
-    <script>
-        // Palette
-        const COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#c084fc', '#2dd4bf'];
+  </div> <!-- End Container -->
 
-        Chart.defaults.color = '#64748b';
-        Chart.defaults.font.family = "'IBM Plex Mono', monospace";
-        Chart.defaults.font.size = 10;
-        Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+  <script>
+    // --- STATIC CONFIG (Based on user actual setup) ---
+    const CONFIG = {
+      entrypoints: [
+        { name: 'web', port: ':8080', protocol: 'HTTP', active: true },
+        { name: 'dashboard', port: ':8081', protocol: 'HTTP', active: true }
+      ],
+      routers: [
+        { name: 'payment-router', rule: "PathPrefix('/api/payment') || PathPrefix('/api/checkout')", priority: 100, middlewares: ['rate-limit', 'cors', 'retry'], service: 'fast-backends' },
+        { name: 'admin-router', rule: "PathPrefix('/admin') && Header('X-Admin-Key','secret')", priority: 90, middlewares: ['basic-auth'], service: 'admin-backends' },
+        { name: 'default-router', rule: "PathPrefix('/')", priority: 1, middlewares: ['rate-limit', 'retry'], service: 'all-backends' }
+      ],
+      services: [
+        { name: 'fast-backends', servers: ['Alpha'], algorithm: 'weighted' },
+        { name: 'admin-backends', servers: ['Beta'], algorithm: 'weighted' },
+        { name: 'all-backends', servers: ['Gamma', 'Delta'], algorithm: 'weighted' }
+      ],
+      middlewares: [
+        { name: 'rate-limit', type: 'rateLimit', summary: '100 rps, burst 50' },
+        { name: 'basic-auth', type: 'basicAuth', summary: 'username/password' },
+        { name: 'retry', type: 'retry', summary: '3 attempts, 100ms backoff' },
+        { name: 'access-log', type: 'accessLog', summary: './logs/access.log' },
+        { name: 'headers', type: 'headers', summary: 'X-Forwarded-For, X-Real-IP etc' },
+        { name: 'timeout', type: 'timeout', summary: 'HIGH=5s, MEDIUM=10s, LOW=20s' },
+        { name: 'circuit-breaker', type: 'circuitBreaker', summary: 'threshold=3, recovery=15s' },
+        { name: 'cors', type: 'cors', summary: 'allowed_origins: ["*"]' }
+      ],
+      features: [
+        { name: 'RATE LIMITING', on: true },
+        { name: 'ACCESS LOG', on: true },
+        { name: 'RETRY', on: true },
+        { name: 'CIRCUIT BREAKER', on: true },
+        { name: 'BASIC AUTH', on: true },
+        { name: 'CORS', on: true },
+        { name: 'TIMEOUT', on: true },
+        { name: 'HOT RELOAD', on: true }
+      ]
+    };
 
-        const chartConfig = {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 0 }, // fast updates without animation bounce
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    backgroundColor: '#1e293b',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#cbd5e1',
-                    borderColor: '#334155',
-                    borderWidth: 1,
-                    cornerRadius: 4,
-                }
-            },
-            scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 10, maxRotation: 0 } },
-                y: { beginAtZero: true }
-            }
-        };
+    // --- CHART GLOBALS ---
+    let charts = {};
+    const colors = { success: '#00ADB5', warning: '#F5A623', error: '#E74C3C', generic1: '#3182CE', generic2: '#805AD5' };
 
-        const rpsChart = new Chart(document.getElementById('rpsChart'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Global RPS', data: [], borderColor: '#60a5fa', backgroundColor: 'rgba(96, 165, 250, 0.1)', tension: 0.2, fill: true, pointRadius: 0 }] },
-            options: { ...chartConfig, plugins: { title: { display: true, text: 'Requests per Second', color: '#cbd5e1', align: 'start' }, legend: {display: false} } }
-        });
+    // --- TIME UPDATE ---
+    setInterval(() => {
+      const d = new Date();
+      document.getElementById('clock').innerText = d.toLocaleTimeString([], {hour12: false});
+    }, 1000);
 
-        const latChart = new Chart(document.getElementById('latencyChart'), {
-            type: 'line',
-            data: { labels: [], datasets: [] },
-            options: { ...chartConfig, plugins: { title: { display: true, text: 'P95 Latency (ms)', color: '#cbd5e1', align: 'start' }, legend: { display: true, labels: { boxWidth: 8, usePointStyle: true } } } }
-        });
+    // --- INITIAL RENDER STATIC ---
+    function renderStatic() {
+      // Entrypoints
+      const epContainer = document.getElementById('entrypoints-container');
+      epContainer.innerHTML = CONFIG.entrypoints.map(ep => 
+        `<div class="card ep-card">
+          <div class="ep-label">${ep.protocol} ${ep.name.toUpperCase()}</div>
+          <div class="ep-port">${ep.port}</div>
+          <div style="margin-top:8px; display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:${ep.active?colors.success:colors.error}">
+            <span style="width:8px;height:8px;border-radius:50%;background:${ep.active?colors.success:colors.error};display:inline-block;"></span> ${ep.active?'LISTENING':'DOWN'}
+          </div>
+        </div>`
+      ).join('');
 
-        // State history arrays (2 minutes / 120 secs)
-        const MAX_PTS = 120;
-        let timeLabels = [];
-        let rpsHistory = [];
-        let latHistory = {};
-        let reportedEventsCount = 0;
+      // Features
+      const ftContainer = document.getElementById('features-container');
+      ftContainer.innerHTML = CONFIG.features.map(ft =>
+        `<div class="feature-card">
+          <div class="feature-title">${ft.name}</div>
+          <div class="feature-state ${ft.on?'on':'off'}">${ft.on?'ON':'OFF'}</div>
+        </div>`
+      ).join('');
+    }
 
-        // WebSocket
-        let ws;
-        function connect() {
-            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${proto}//${location.host}/ws`);
-            
-            ws.onopen = () => {
-                const b = document.getElementById('ws-badge');
-                b.className = 'badge ws-live';
-                document.getElementById('ws-text').textContent = 'Live';
-            };
-            
-            ws.onclose = () => {
-                const b = document.getElementById('ws-badge');
-                b.className = 'badge ws-unconnected';
-                document.getElementById('ws-text').textContent = 'Offline';
-                setTimeout(connect, 3000);
-            };
-            
-            ws.onmessage = e => {
-                try {
-                    const msg = JSON.parse(e.data);
-                    if (msg.type === 'history') {
-                        processHistory(msg.data);
-                    } else if (msg.type === 'tick') {
-                        updateSnapshot(msg.data);
-                    } else if (!msg.type) {
-                        // Legacy generic fallback (shouldn't be needed with our new hub)
-                        updateSnapshot(msg);
-                    }
-                } catch (err) {
-                    console.error("Parse error:", err);
-                }
-            };
-        }
+    function initCharts() {
+      Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+      const donutConfig = {
+        type: 'doughnut',
+        options: { cutout: '70%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: true } }, animation: {duration: 0} } // disable animation for smooth ticks
+      };
 
-        function processHistory(historyArray) {
-            if (!historyArray || historyArray.length === 0) return;
-            
-            timeLabels = [];
-            rpsHistory = [];
-            latHistory = {};
-            
-            // Recompute from history to fill charts immediately
-            historyArray.forEach((snap, idx) => {
-                // Fake times based on current time going backwards if we don't have timestamps,
-                // but we can just use simple index or real time elapsed.
-                // Assuming snapshots are 1 sec apart and end *now*.
-                const d = new Date(Date.now() - (historyArray.length - 1 - idx) * 1000);
-                timeLabels.push(d.toLocaleTimeString([], {minute:'2-digit', second:'2-digit'}));
-                rpsHistory.push(snap.global_rps || 0);
-                
-                Object.values(snap.servers).forEach(s => {
-                    if (!latHistory[s.name]) latHistory[s.name] = [];
-                    latHistory[s.name].push(s.p95_latency_ms || 0); // Plotting P95
-                });
-            });
+      charts.routers = new Chart(document.getElementById('donut-routers'), { ...donutConfig, data: { labels: ['Success', 'Warnings', 'Errors'], datasets: [{ data: [0,0,0], backgroundColor: [colors.success, colors.warning, colors.error], borderWidth: 0 }] } });
+      charts.services = new Chart(document.getElementById('donut-services'), { ...donutConfig, data: { labels: ['Success', 'Warnings', 'Errors'], datasets: [{ data: [0,0,0], backgroundColor: [colors.success, colors.warning, colors.error], borderWidth: 0 }] } });
+      charts.middlewares = new Chart(document.getElementById('donut-middlewares'), { ...donutConfig, data: { labels: ['Success', 'Warnings', 'Errors'], datasets: [{ data: [0,0,0], backgroundColor: [colors.success, colors.warning, colors.error], borderWidth: 0 }] } });
+      charts.servers = new Chart(document.getElementById('donut-servers'), { ...donutConfig, data: { labels: ['Success', 'Warnings', 'Errors'], datasets: [{ data: [0,0,0], backgroundColor: [colors.success, colors.warning, colors.error], borderWidth: 0 }] } });
+      charts.circuits = new Chart(document.getElementById('donut-circuits'), { ...donutConfig, data: { labels: ['Closed', 'Half Open', 'Open'], datasets: [{ data: [0,0,0], backgroundColor: [colors.success, colors.warning, colors.error], borderWidth: 0 }] } });
+      charts.priority = new Chart(document.getElementById('donut-priority'), { ...donutConfig, data: { labels: ['High Priority', 'Low Priority'], datasets: [{ data: [0,0], backgroundColor: [colors.generic1, colors.generic2], borderWidth: 0 }] } });
+      
+      charts.rps = new Chart(document.getElementById('rps-line-chart'), {
+        type: 'line',
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            x: { display: false },
+            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+          },
+          plugins: { legend: { display: false } },
+          elements: { line: { tension: 0.2, borderWidth: 2 }, point: { radius: 0 } }
+        },
+        data: { labels: [], datasets: [{ label: 'Global RPS', data: [], borderColor: colors.success, backgroundColor: 'rgba(0,173,181,0.1)', fill: true }] }
+      });
+    }
 
-            // The last snapshot represents the current state
-            updateSnapshot(historyArray[historyArray.length - 1], false);
-            updateCharts();
-        }
+    // --- DOM UPDATES ---
+    function updateDonut(name, s, w, e) {
+      if(!charts[name]) return;
+      charts[name].data.datasets[0].data = [s, w, e];
+      let total = s + w + e;
+      if (name === 'priority') {
+          total = s + w;
+      }
+      
+      const elCenter = document.getElementById(`center-${name}`);
+      if(elCenter && name !== 'priority') elCenter.innerText = total;
 
-        function updateSnapshot(snap, pushToHistory = true) {
-            if (!snap || !snap.servers) return;
-            
-            const entries = Object.entries(snap.servers);
-            let active = 0;
-            
-            entries.forEach(([, s]) => {
-                active += s.active_connections;
-            });
+      charts[name].update();
+      
+      const elLegend = document.getElementById(`legend-${name}`);
+      if(elLegend && name !== 'priority') {
+        elLegend.innerHTML = `
+          <div class="legend-item"><i class="legend-icon icon-success">✔</i><div class="legend-text"><span class="legend-label">Success</span><span class="legend-pct">${total>0?Math.round((s/total)*100):0}%</span></div><span class="legend-val">${s}</span></div>
+          <div class="legend-item"><i class="legend-icon icon-warning">!</i><div class="legend-text"><span class="legend-label">Warnings</span><span class="legend-pct">${total>0?Math.round((w/total)*100):0}%</span></div><span class="legend-val">${w}</span></div>
+          <div class="legend-item"><i class="legend-icon icon-error">✘</i><div class="legend-text"><span class="legend-label">Errors</span><span class="legend-pct">${total>0?Math.round((e/total)*100):0}%</span></div><span class="legend-val">${e}</span></div>
+        `;
+      } else if (elLegend && name === 'priority') {
+        elLegend.innerHTML = `
+          <div class="legend-item"><i class="legend-icon" style="background:${colors.generic1}">Hi</i><div class="legend-text"><span class="legend-label">High Priority</span><span class="legend-pct">${total>0?Math.round((s/total)*100):0}%</span></div><span class="legend-val">${s}</span></div>
+          <div class="legend-item"><i class="legend-icon" style="background:${colors.generic2}">Lo</i><div class="legend-text"><span class="legend-label">Low Priority</span><span class="legend-pct">${total>0?Math.round((w/total)*100):0}%</span></div><span class="legend-val">${w}</span></div>
+        `;
+      }
+    }
 
-            // Update KPIs
-            document.getElementById('global-rps').textContent = (snap.global_rps || 0).toFixed(1);
-            document.getElementById('total-req').textContent = snap.total_requests.toLocaleString();
-            document.getElementById('success-rate').textContent = snap.success_rate > 0 ? snap.success_rate.toFixed(1) + '%' : '—';
-            document.getElementById('healthy-count').textContent = `${snap.healthy_count} / ${snap.total_count}`;
-            document.getElementById('active-conn').textContent = active;
-            document.getElementById('algo-badge').innerHTML = `Algo: <span class="mono" style="color:#fff">${snap.algorithm || 'unknown'}</span>`;
+    let rpsHistory = [];
 
-            // Circuit breaker events KPI & Log
-            const events = snap.circuit_events || [];
-            document.getElementById('circuit-kpi').textContent = events.length;
-            
-            if (events.length > 0 && events.length !== reportedEventsCount) {
-                reportedEventsCount = events.length;
-                const logHtml = events.slice().reverse().map(e => `
-                    <li class="log-item">
-                        <div class="log-time">${e.timestamp}</div>
-                        <div class="log-msg">
-                            <span class="log-highlight">${e.server_name}</span> 
-                            transitioned to <span class="state-${e.new_state}">${e.new_state}</span>
-                        </div>
-                    </li>
-                `).join('');
-                document.getElementById('event-log').innerHTML = logHtml;
-            }
+    function handleSnapshot(snap) {
+      if(!snap) return;
+      const serversDict = snap.servers || {};
+      const servers = Object.values(serversDict);
 
-            // Server cards
-            document.getElementById('server-grid').innerHTML = entries.map(([url, s], i) => {
-                const sr = s.total_requests > 0 ? (s.success_count / s.total_requests * 100).toFixed(1) : '—';
-                const cc = s.circuit_state === 'CLOSED' ? 'closed' : s.circuit_state === 'OPEN' ? 'open' : 'half';
-                const color = COLORS[i % COLORS.length];
-                return `<div class="server-card">
-                    <div class="server-card-header">
-                        <span class="server-name" style="color:${color}">${s.name}</span>
-                        <span class="status-badge ${s.is_healthy ? 'up' : 'down'}">
-                            <span class="dot"></span>
-                            ${s.is_healthy ? 'UP' : 'DOWN'}
-                        </span>
-                    </div>
-                    <div class="server-stats">
-                        <table>
-                            <tr><td>Requests</td><td>${s.total_requests.toLocaleString()}</td></tr>
-                            <tr><td>Active</td><td>${s.active_connections}</td></tr>
-                            <tr><td>Retries</td><td>${s.retry_count}</td></tr>
-                            <tr><td>P95 Latency</td><td>${s.p95_latency_ms ? s.p95_latency_ms.toFixed(1) : '0.0'} ms</td></tr>
-                            <tr><td>Success</td><td>${sr}%</td></tr>
-                            <tr><td>Circuit</td><td><span class="circuit-tag ${cc}">${s.circuit_state}</span></td></tr>
-                            <tr><td>Priority (H/L)</td><td>
-                                <div class="pri-group">
-                                    <span class="pri-h">${s.high_priority_count}</span>
-                                    <span class="pri-sep">/</span>
-                                    <span class="pri-l">${s.low_priority_count}</span>
-                                </div>
-                            </td></tr>
-                        </table>
-                    </div>
-                </div>`;
-            }).join('');
+      // KPIs
+      document.getElementById('kpi-total').innerText = snap.total_requests || 0;
+      document.getElementById('kpi-success').innerText = (snap.success_rate || 0).toFixed(1);
+      document.getElementById('kpi-rps').innerText = (snap.global_rps || 0).toFixed(1);
+      document.getElementById('kpi-healthy').innerText = `${snap.healthy_count || 0}/${snap.total_count || 0}`;
+      
+      let activeConns = 0, highP = 0, lowP = 0;
+      let srvS = 0, srvW = 0, srvE = 0;
+      let cbS = 0, cbW = 0, cbE = 0;
 
-            // Push state history
-            if (pushToHistory) {
-                const nowStr = new Date().toLocaleTimeString([], {minute:'2-digit', second:'2-digit'});
-                timeLabels.push(nowStr);
-                rpsHistory.push(snap.global_rps || 0);
-                
-                entries.forEach(([, s]) => {
-                    if (!latHistory[s.name]) latHistory[s.name] = new Array(timeLabels.length-1).fill(0);
-                    latHistory[s.name].push(s.p95_latency_ms || 0);
-                });
+      let serversHtml = '';
+      
+      servers.forEach(s => {
+        activeConns += (s.active_connections || 0);
+        highP += (s.high_priority_count || 0);
+        lowP += (s.low_priority_count || 0);
+        
+        // Server status
+        let stLabel = 'OK', stClass = 'status-success';
+        if (!s.is_healthy || s.circuit_state === 'OPEN') { stLabel = 'DOWN'; stClass = 'status-error'; srvE++; }
+        else if (s.circuit_state === 'HALF_OPEN') { stLabel = 'WARNING'; stClass = 'status-warning'; srvW++; }
+        else { srvS++; }
 
-                // Trim to MAX_PTS
-                if (timeLabels.length > MAX_PTS) {
-                    timeLabels.shift();
-                    rpsHistory.shift();
-                    Object.keys(latHistory).forEach(name => {
-                        latHistory[name].shift();
-                    });
-                }
-                updateCharts();
-            }
-        }
+        // CB status
+        let cbClass = 'status-success';
+        if (s.circuit_state === 'OPEN') { cbClass = 'status-error'; cbE++; }
+        else if (s.circuit_state === 'HALF_OPEN') { cbClass = 'status-warning'; cbW++; }
+        else { cbS++; }
 
-        function updateCharts() {
-            // RPS Chart
-            rpsChart.data.labels = timeLabels;
-            rpsChart.data.datasets[0].data = rpsHistory;
-            rpsChart.update();
+        serversHtml += `<tr>
+          <td><strong>${s.name}</strong></td>
+          <td class="mono">${s.url}</td>
+          <td><span class="status-badge ${stClass}">${stLabel}</span></td>
+          <td><span class="status-badge ${cbClass}">${s.circuit_state}</span></td>
+          <td class="mono">${(s.avg_latency_ms||0).toFixed(1)}</td>
+          <td class="mono">${(s.p95_latency_ms||0).toFixed(1)}</td>
+          <td class="mono">${s.active_connections || 0}</td>
+          <td class="mono">${s.total_requests || 0}</td>
+        </tr>`;
+      });
+      document.getElementById('kpi-active').innerText = activeConns;
 
-            // P95 Latency Chart
-            const datasets = Object.keys(latHistory).map((name, i) => ({
-                label: name,
-                data: latHistory[name],
-                borderColor: COLORS[i % COLORS.length],
-                segment: {
-                    borderColor: ctx => skipped(ctx, 'rgba(255,255,255,0.05)')
-                },
-                spanGaps: true,
-                borderWidth: 2,
-                pointRadius: 0,
-                tension: 0.1
-            }));
-            
-            function skipped(ctx, value) {
-                return ctx.p0.skip || ctx.p1.skip ? value : undefined;
-            }
+      // Update Backends Donuts
+      updateDonut('servers', srvS, srvW, srvE);
+      updateDonut('circuits', cbS, cbW, cbE);
+      updateDonut('priority', highP, lowP, 0);
 
-            latChart.data.labels = timeLabels;
-            latChart.data.datasets = datasets;
-            latChart.update();
-        }
+      // Tables
+      populateTable('table-servers', serversHtml);
+      populateTable('fs-table-servers', `<thead><tr><th>Name</th><th>URL</th><th>Status</th><th>Circuit</th><th>Avg ms</th><th>P95 ms</th><th>Active</th><th>Total</th></tr></thead><tbody>${serversHtml}</tbody>`);
 
-        // Clock
-        function tick() {
-            const d = new Date();
-            document.getElementById('clock').textContent =
-                d.getHours().toString().padStart(2, '0') + ':' +
-                d.getMinutes().toString().padStart(2, '0') + ':' +
-                d.getSeconds().toString().padStart(2, '0');
-        }
-        tick(); setInterval(tick, 1000);
-        connect();
-    </script>
+      // Circuit Events
+      let evtsHtml = '';
+      (snap.circuit_events || []).slice(0, 20).forEach(e => {
+        evtsHtml += `<tr><td class="mono">${e.timestamp}</td><td><strong>${e.server_name}</strong></td>
+        <td><span class="status-badge status-outline">${e.old_state}</span> &rarr; <span class="status-badge ${e.new_state==='OPEN'?'status-error':'status-success'}">${e.new_state}</span></td></tr>`;
+      });
+      populateTable('table-circuits', evtsHtml);
+
+      // Middlewares Status (Static configuration assumes healthy unless we attach traffic limits, but user says use WebSocket count)
+      // "Success = active middleware count" -> all 8 are active.
+      updateDonut('middlewares', CONFIG.middlewares.length, 0, 0);
+      let midHtml = '';
+      CONFIG.middlewares.forEach(m => {
+        midHtml += `<tr><td><strong>${m.name}</strong></td><td class="mono">${m.type}</td><td class="mono">${m.summary}</td><td><span class="status-badge status-success">ACTIVE</span></td></tr>`;
+      });
+      populateTable('table-middlewares', midHtml);
+      populateTable('fs-table-middlewares', `<thead><tr><th>Name</th><th>Type</th><th>Config Summary</th><th>Status</th></tr></thead><tbody>${midHtml}</tbody>`);
+
+      // Services compute based on server health
+      let svcS = 0, svcW = 0, svcE = 0;
+      let svcHtml = '';
+      CONFIG.services.forEach(svc => {
+        const associated = servers.filter(s => svc.servers.includes(s.name));
+        const total = associated.length;
+        const healthy = associated.filter(s => s.is_healthy).length;
+        
+        let stClass = 'status-success', stLabel = 'HEALTHY';
+        if (total === 0) { stClass = 'status-error'; stLabel = 'NO SERVERS'; svcE++; }
+        else if (healthy === 0) { stClass = 'status-error'; stLabel = 'FAILING'; svcE++; }
+        else if (healthy < total) { stClass = 'status-warning'; stLabel = 'DEGRADED'; svcW++; }
+        else { svcS++; }
+
+        svcHtml += `<tr><td><strong>${svc.name}</strong></td><td class="mono">${svc.servers.join(', ')}</td><td class="mono">${svc.algorithm}</td><td><span class="status-badge ${stClass}">${stLabel}</span></td></tr>`;
+      });
+      updateDonut('services', svcS, svcW, svcE);
+      populateTable('table-services', svcHtml);
+      populateTable('fs-table-services', `<thead><tr><th>Name</th><th>Servers</th><th>Algorithm</th><th>Status</th></tr></thead><tbody>${svcHtml}</tbody>`);
+
+      // Routers compute based on middlewares and services
+      let rtrS = 0, rtrW = 0, rtrE = 0;
+      let rtrHtml = '';
+      CONFIG.routers.forEach(r => {
+        // Assume Routers are Success if their config exists, since no error reporting from backend exists yet per task instructions.
+        rtrS++; 
+        rtrHtml += `<tr><td><strong>${r.name}</strong></td><td class="mono">${r.rule}</td><td class="mono">${r.priority}</td><td class="mono">${r.middlewares.join(', ')}</td><td class="mono">${r.service}</td><td><span class="status-badge status-success">ACTIVE</span></td></tr>`;
+      });
+      updateDonut('routers', rtrS, 0, 0);
+      populateTable('table-routers', rtrHtml);
+      populateTable('fs-table-routers', `<thead><tr><th>Name</th><th>Rule</th><th>Priority</th><th>Middlewares</th><th>Service</th><th>Status</th></tr></thead><tbody>${rtrHtml}</tbody>`);
+    }
+
+    function populateTable(id, bodyHtml) {
+      const el = document.getElementById(id);
+      if(!el) return;
+      const t = el.querySelector('tbody') || el;
+      t.innerHTML = bodyHtml || '<tr><td colspan="10" style="text-align:center; color:#999;">No data</td></tr>';
+    }
+
+    function handleHistory(dataArr) {
+      rpsHistory = [];
+      const labels = [];
+      dataArr.forEach((snap, i) => {
+        rpsHistory.push(snap.global_rps || 0);
+        labels.push('');
+      });
+      if(charts.rps) {
+        charts.rps.data.labels = labels;
+        charts.rps.data.datasets[0].data = rpsHistory;
+        charts.rps.update();
+      }
+      if(dataArr.length > 0) handleSnapshot(dataArr[dataArr.length - 1]);
+    }
+
+    function handleTick(snap) {
+      handleSnapshot(snap);
+      if(charts.rps) {
+        rpsHistory.push(snap.global_rps || 0);
+        if(rpsHistory.length > 120) rpsHistory.shift();
+        charts.rps.data.labels = rpsHistory.map(() => '');
+        charts.rps.data.datasets[0].data = rpsHistory;
+        charts.rps.update();
+      }
+    }
+
+    function connectWS() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wssUrl = `${protocol}//${window.location.host}/ws`;
+      const pill = document.getElementById('connection-pill');
+      
+      const ws = new WebSocket(wssUrl);
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'history') handleHistory(msg.data);
+          else if (msg.type === 'tick') handleTick(msg.data);
+        } catch(err) { console.error('WS Parse Error', err); }
+      };
+      ws.onopen = () => { pill.className = 'pill live'; pill.innerText = 'Live'; };
+      ws.onclose = () => { pill.className = 'pill offline'; pill.innerText = 'Offline'; setTimeout(connectWS, 3000); };
+      ws.onerror = () => { ws.close(); };
+    }
+
+    // --- INTERACTION ---
+    function toggleExplore(btn, tableId) {
+      const parent = btn.closest('.card');
+      const container = parent.querySelector('.explore-container');
+      if (container.classList.contains('open')) {
+        container.classList.remove('open');
+        btn.innerHTML = 'Explore &rarr;';
+      } else {
+        container.classList.add('open');
+        btn.innerHTML = 'Close &uarr;';
+      }
+    }
+
+    // Tab Switching
+    document.getElementById('mainTabs').addEventListener('click', (e) => {
+      if(e.target.tagName !== 'BUTTON') return;
+      document.querySelectorAll('#mainTabs button').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      
+      const targetId = 'view-' + e.target.getAttribute('data-target');
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(targetId).classList.add('active');
+    });
+
+    // Boot
+    window.onload = () => {
+      renderStatic();
+      initCharts();
+      // Initially, render empty data zero safely
+      handleSnapshot({});
+      connectWS();
+    };
+  </script>
 </body>
 </html>

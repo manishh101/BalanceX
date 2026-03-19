@@ -1,7 +1,7 @@
 {
   "entrypoints": {
     "web": {
-      "address": ":8080",
+      "address": ":8082",
       "protocol": "http",
       "middlewares": ["headers", "access-log", "rate-limit", "timeout"]
     },
