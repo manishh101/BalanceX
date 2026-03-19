@@ -31,8 +31,9 @@ func BasicAuth(username, password string) Middleware {
 
 			if subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 ||
 				subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
-				// Credentials provided but wrong — 403 Forbidden
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				// Credentials provided but wrong — return 401 to re-prompt
+				w.Header().Set("WWW-Authenticate", `Basic realm="Load Balancer Dashboard"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
