@@ -20,7 +20,9 @@ import (
 	"intelligent-lb/internal/hotreload"
 	"intelligent-lb/internal/logging"
 	"intelligent-lb/internal/metrics"
+	"intelligent-lb/internal/middleware"
 	"intelligent-lb/internal/proxy"
+	"intelligent-lb/internal/router"
 	"intelligent-lb/internal/tlsutil"
 )
 
@@ -28,11 +30,33 @@ import (
 type appState struct {
 	mu        sync.RWMutex
 	cfg       *config.Config
-	router    *balancer.Router
 	collector *metrics.Collector
 	breakers  map[string]*health.Breaker
 	monitor   *health.Monitor
+
+	// Legacy global proxy (when no routers match)
 	proxy     *proxy.Handler
+
+	// Rule-based routing
+	routerMgr *router.Manager
+	services  map[string]http.Handler
+}
+
+// ServeHTTP implements the top-level routing logic. It evaluates the request
+// against rule-based routers. If a match is found, it forwards to the router's
+// middleware-wrapped service handler. If no match (or no routers configured),
+// it falls back to the legacy priority-based global proxy pool.
+func (s *appState) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	s.mu.RLock()
+	route := s.routerMgr.Route(req)
+	legacyProxy := s.proxy
+	s.mu.RUnlock()
+
+	if route != nil {
+		route.Handler.ServeHTTP(w, req)
+		return
+	}
+	legacyProxy.ServeHTTP(w, req)
 }
 
 func main() {
@@ -75,9 +99,6 @@ func main() {
 	}
 
 	// ── Create Entrypoint Manager ─────────────────────────────────────
-	// Inspired by Traefik's TCPEntryPoints pattern: each entrypoint runs
-	// as its own independent HTTP server with its own goroutine, middleware
-	// chain, and connection handling.
 	epManager := entrypoint.NewManager()
 
 	for epName, epCfg := range cfg.EntryPoints {
@@ -102,8 +123,8 @@ func main() {
 
 			handler = dashMux
 		} else {
-			// All other entrypoints get the proxy handler
-			handler = state.proxy
+			// All other entrypoints get the top-level app state dispatcher
+			handler = state
 		}
 
 		ep := entrypoint.New(epName, epCfg, handler, middlewares)
@@ -111,8 +132,6 @@ func main() {
 	}
 
 	// ── Start All Entrypoints ─────────────────────────────────────────
-	// Each entrypoint starts in its own goroutine — failure of one does
-	// not affect others. Mirrors Traefik's TCPEntryPoints.Start().
 	epManager.StartAll()
 
 	// Print startup banner
@@ -120,11 +139,8 @@ func main() {
 	log.Printf("[MAIN] Intelligent Stateless Load Balancer")
 	log.Printf("[MAIN] ═══════════════════════════════════════════════════")
 	log.Printf("[MAIN] Algorithm:   %s", cfg.Algorithm)
-	log.Printf("[MAIN] Servers:     %d", len(cfg.Servers))
-	log.Printf("[MAIN] Health:      per-server config")
+	log.Printf("[MAIN] Servers:     %d (legacy), %d (services), %d (routers)", len(cfg.Servers), len(cfg.Services), len(cfg.Routers))
 	log.Printf("[MAIN] Rate Limit:  %.0f rps/IP (burst %d)", cfg.RateLimitRPS, cfg.RateLimitBurst)
-	log.Printf("[MAIN] Retry:       %d max, backoff %dms-%dms", cfg.MaxRetries, cfg.RetryBackoffMs, cfg.RetryBackoffMaxMs)
-	log.Printf("[MAIN] Access Log:  %s", cfg.AccessLogPath)
 	log.Printf("[MAIN] Entrypoints:")
 	for name, ep := range cfg.EntryPoints {
 		tlsStatus := "off"
@@ -150,9 +166,6 @@ func main() {
 	}
 
 	// ── Graceful Shutdown ──────────────────────────────────────────────
-	// On SIGTERM or Ctrl+C, all entrypoints stop accepting new connections,
-	// drain in-flight requests, then exit cleanly. This mirrors Traefik's
-	// TCPEntryPoints.Stop() pattern with coordinated WaitGroup shutdown.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
@@ -163,7 +176,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Shutdown all entrypoints concurrently
 	if err := epManager.ShutdownAll(ctx); err != nil {
 		log.Printf("[MAIN] Entrypoint shutdown errors: %v", err)
 	}
@@ -175,17 +187,30 @@ func main() {
 
 // initialize sets up all components from the given config.
 func (s *appState) initialize(cfg *config.Config) {
+	// 1. Gather all unique servers across global Servers and named Services
+	allServers := make(map[string]config.ServerConfig)
+	for _, srv := range cfg.Servers {
+		allServers[srv.URL] = srv
+	}
+	for _, svc := range cfg.Services {
+		for _, srv := range svc.Servers {
+			allServers[srv.URL] = srv
+		}
+	}
+
 	var serverURLs []string
 	var serverNames []string
 	var serverWeights []int
-	for _, srv := range cfg.Servers {
-		serverURLs = append(serverURLs, srv.URL)
+	var monitorServers []config.ServerConfig
+	for url, srv := range allServers {
+		serverURLs = append(serverURLs, url)
 		serverNames = append(serverNames, srv.Name)
 		serverWeights = append(serverWeights, srv.Weight)
+		monitorServers = append(monitorServers, srv)
 	}
 
+	// 2. Initialize global metrics, breakers, and health monitor
 	s.collector = metrics.New(serverURLs, serverNames, serverWeights)
-
 	s.breakers = make(map[string]*health.Breaker)
 	for _, url := range serverURLs {
 		s.breakers[url] = health.NewBreaker(
@@ -193,33 +218,82 @@ func (s *appState) initialize(cfg *config.Config) {
 			time.Duration(cfg.BreakerTimeoutSec)*time.Second,
 		)
 	}
-
-	var algo balancer.Algorithm
-	switch cfg.Algorithm {
-	case "roundrobin":
-		algo = &balancer.RoundRobin{}
-	case "leastconn":
-		algo = balancer.LeastConnections{}
-	case "canary":
-		algo = &balancer.Canary{}
-	default:
-		algo = balancer.WeightedScore{}
+	
+	// Only start monitor if we have servers to monitor
+	if len(monitorServers) > 0 {
+		s.monitor = health.NewMonitor(monitorServers, s.collector, s.breakers)
+		s.monitor.Start()
 	}
 
-	s.router = balancer.NewRouter(serverURLs, s.collector, s.breakers, algo)
+	// 3. Helper to create a balancer.Algorithm
+	getAlgo := func(name string) balancer.Algorithm {
+		switch name {
+		case "roundrobin":
+			return &balancer.RoundRobin{}
+		case "leastconn":
+			return balancer.LeastConnections{}
+		case "canary":
+			return &balancer.Canary{}
+		default:
+			return balancer.WeightedScore{}
+		}
+	}
 
-	s.monitor = health.NewMonitor(cfg.Servers, s.collector, s.breakers)
-	s.monitor.Start()
-
+	// 4. Create legacy global proxy (for backward compatibility)
+	var globalURLs []string
+	for _, srv := range cfg.Servers {
+		globalURLs = append(globalURLs, srv.URL)
+	}
+	globalRouter := balancer.NewRouter(globalURLs, s.collector, s.breakers, getAlgo(cfg.Algorithm))
 	s.proxy = proxy.New(
-		s.router, s.collector, s.breakers,
+		globalRouter, s.collector, s.breakers,
 		cfg.MaxRetries, cfg.PerAttemptTimeoutSec,
 		cfg.RetryBackoffMs, cfg.RetryBackoffMaxMs,
 	)
+
+	// 5. Create specific proxy handlers for named Services
+	s.services = make(map[string]http.Handler)
+	for svcName, svcCfg := range cfg.Services {
+		var svcURLs []string
+		for _, srv := range svcCfg.Servers {
+			svcURLs = append(svcURLs, srv.URL)
+		}
+		svcRouter := balancer.NewRouter(svcURLs, s.collector, s.breakers, getAlgo(cfg.Algorithm))
+		s.services[svcName] = proxy.New(
+			svcRouter, s.collector, s.breakers,
+			cfg.MaxRetries, cfg.PerAttemptTimeoutSec,
+			cfg.RetryBackoffMs, cfg.RetryBackoffMaxMs,
+		)
+	}
+
+	// 6. Build the rule-based router manager
+	s.routerMgr = router.NewManager()
+	for rtName, rtCfg := range cfg.Routers {
+		// Resolve the target service
+		svcHandler, ok := s.services[rtCfg.Service]
+		if !ok {
+			log.Printf("[MAIN] Warning: router %q references unknown service %q", rtName, rtCfg.Service)
+			continue
+		}
+
+		// Resolve router-specific middlewares
+		// We reuse the entrypoint.ResolveMiddlewares func as it builds handlers given names and config.
+		middlewares := entrypoint.ResolveMiddlewares(rtCfg.Middlewares, cfg)
+		
+		// Wrap the service handler with the router's middlewares
+		finalHandler := svcHandler
+		if len(middlewares) > 0 {
+			chain := middleware.Chain(middlewares...)
+			finalHandler = chain(finalHandler)
+		}
+
+		if err := s.routerMgr.AddRoute(rtName, rtCfg.Rule, rtCfg.Priority, rtCfg.Middlewares, rtCfg.Service, finalHandler); err != nil {
+			log.Printf("[MAIN] Warning: failed to add router %q: %v", rtName, err)
+		}
+	}
 }
 
 // reload re-reads the config and swaps out mutable components.
-// This is called by the hot reload watcher when config.json changes.
 func (s *appState) reload(path string) error {
 	newCfg, err := config.Load(path)
 	if err != nil {
@@ -229,13 +303,14 @@ func (s *appState) reload(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Stop existing health monitor
-	s.monitor.Stop()
+	if s.monitor != nil {
+		s.monitor.Stop()
+	}
 
-	// Reinitialize with new config
 	s.cfg = newCfg
 	s.initialize(newCfg)
 
-	log.Printf("[MAIN] Hot reload complete: %d servers, algorithm=%s", len(newCfg.Servers), newCfg.Algorithm)
+	log.Printf("[MAIN] Hot reload complete: %d legacy servers, %d routers", len(newCfg.Servers), len(newCfg.Routers))
 	return nil
 }
+

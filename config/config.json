@@ -40,6 +40,60 @@
   "cors": {
     "allowed_origins": ["*"]
   },
+  "routers": {
+    "payment-router": {
+      "rule": "PathPrefix('/api/payment') || PathPrefix('/api/checkout')",
+      "priority": 100,
+      "middlewares": ["rate-limit", "cors"],
+      "service": "fast-backends"
+    },
+    "admin-router": {
+      "rule": "PathPrefix('/admin') && Header('X-Admin-Key', 'secret')",
+      "priority": 90,
+      "middlewares": ["basic-auth"],
+      "service": "admin-backends"
+    },
+    "default-router": {
+      "rule": "PathPrefix('/')",
+      "priority": 1,
+      "middlewares": ["rate-limit"],
+      "service": "all-backends"
+    }
+  },
+  "services": {
+    "fast-backends": {
+      "servers": [
+        {
+          "url": "http://localhost:8001",
+          "name": "Alpha-Fast",
+          "weight": 5
+        }
+      ]
+    },
+    "admin-backends": {
+      "servers": [
+        {
+          "url": "http://localhost:8002",
+          "name": "Beta-Admin",
+          "weight": 3
+        }
+      ]
+    },
+    "all-backends": {
+      "servers": [
+        {
+          "url": "http://localhost:8003",
+          "name": "Gamma-All",
+          "weight": 1
+        },
+        {
+          "url": "http://localhost:8004",
+          "name": "Delta-All",
+          "weight": 4
+        }
+      ]
+    }
+  },
   "servers": [
     {
       "url": "http://localhost:8001",

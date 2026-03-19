@@ -66,32 +66,33 @@ The system features a **three-state circuit breaker** (CLOSED → OPEN → HALF_
 ```
                         ┌──────────────────────────────────────────────────┐
                         │              LOAD BALANCER (:8080)               │
-                        │                                                  │
-  Client Request ──────►│  ┌──────────────┐    ┌────────────────────────┐  │
-                        │  │   Priority    │    │    Routing Engine      │  │
-                        │  │  Classifier   │───►│                        │  │
-                        │  │ (HIGH / LOW)  │    │  ┌──────────────────┐  │  │
-                        │  └──────────────┘    │  │  Weighted Score  │  │  │
-                        │                      │  │  Round Robin     │  │  │
-                        │                      │  │  Least Conn      │  │  │
-                        │                      │  └──────────────────┘  │  │
-                        │                      └───────────┬────────────┘  │
-                        │                                  │               │
-                        │  ┌──────────────┐    ┌──────────▼────────────┐  │
-                        │  │   Metrics     │◄───│    Reverse Proxy      │  │
-                        │  │  Collector    │    │   (HTTP Forwarding)   │  │
-                        │  └──────┬───────┘    └──────────┬────────────┘  │
-                        │         │                       │               │
-                        │  ┌──────▼───────┐    ┌──────────▼────────────┐  │
-                        │  │  Dashboard    │    │   Circuit Breakers    │  │
-                        │  │  (WebSocket)  │    │   (per-server)       │  │
-                        │  │  [:8081]      │    └──────────┬────────────┘  │
-                        │  └──────────────┘               │               │
-                        │                      ┌──────────▼────────────┐  │
-                        │                      │   Health Monitor      │  │
-                        │                      │   (periodic checks)   │  │
-                        │                      └───────────────────────┘  │
-                        └──────────────────────────────────────────────────┘
+                        │  ┌──────────┼───────────┐    ┌────────────────────────┐  │
+                        │  │ ┌──────────────────┐ │    │    Routing Engine      │  │
+                        │  │ │   Rule Router    │ │───►│                        │  │
+                        │  │ │ (Path, Header..) │ │    │  ┌──────────────────┐  │  │
+                        │  │ └─────────┬────────┘ │    │  │  Weighted Score  │  │  │
+                        │  │           │          │    │  │  Round Robin     │  │  │
+                        │  │ ┌─────────▼────────┐ │    │  │  Least Conn      │  │  │
+                        │  │ │   Priority       │ │    │  └──────────────────┘  │  │
+                        │  │ │  Classifier      │ │    └───────────┬────────────┘  │
+                        │  │ │ (HIGH / LOW)     │ │                │               │
+                        │  │ └──────────────────┘ │                │               │
+                        │  └──────────┬───────────┘    ┌──────────▼────────────┐  │
+                        │             │                │    Reverse Proxy      │  │
+                        │  ┌──────────▼───┐            │   (HTTP Forwarding)   │  │
+                        │  │   Metrics    │◄───────────┤                       │  │
+                        │  │  Collector   │            └──────────┬────────────┘  │
+                        │  └──────┬───────┘                       │               │
+                        │         │                    ┌──────────▼────────────┐  │
+                        │  ┌──────▼───────┐            │   Circuit Breakers    │  │
+                        │  │  Dashboard   │            │   (per-server)       │  │
+                        │  │  (WebSocket) │            └──────────┬────────────┘  │
+                        │  │  [:8081]     │                       │               │
+                        │  └──────────────┘            ┌──────────▼────────────┐  │
+                        │                              │   Health Monitor      │  │
+                        │                              │   (periodic checks)   │  │
+                        │                              └───────────────────────┘  │
+                        └──────────────────────────────────────────────────────────┘
                                                │
                         ┌──────────────────────▼──────────────────────────┐
                         │              BACKEND SERVERS                     │
@@ -142,6 +143,13 @@ intelligent-lb/
 │   ├── chaos_mode.go            # Chaos monkey + stress test (dynamic failures)
 │   └── dynamic_load.go          # Sine-wave oscillating traffic generator
 ├── config/
+│   ├── config.go                # Configuration loader with defaults
+│   └── config.json              # Runtime configuration file
+├── internal/
+│   ├── router/
+│   │   ├── router.go            # Rule-based router manager
+│   │   ├── rule.go              # Traefik-inspired rule syntax parser
+│   │   └── matcher.go           # Matcher functions (PathPrefix, Method, etc.)
 │   ├── config.go                # Configuration loader with defaults
 │   └── config.json              # Runtime configuration file
 ├── web/
@@ -311,14 +319,31 @@ A WebSocket-powered monitoring dashboard that broadcasts metrics snapshots every
 
 ---
 
+### 8. Rule-Based Routing
+**Files:** `internal/router/router.go`, `internal/router/rule.go`
+
+A Traefik-inspired rule engine that evaluates incoming requests against configured matchers to dynamically determine the target backend service and middleware chain.
+
+**Features:**
+- Supports logical operators (`&&`, `||`, `()`) for complex matching logic.
+- Built-in matchers: `PathPrefix('/api')`, `Path('/exact/path')`, `Method('POST')`, `Header('X-Internal', 'true')`, and `ClientIP('192.168.1.0/24')`.
+- Routers evaluate in a deterministic priority order (highest priority first, breaking ties by preferring the longest rule string).
+- Complete backward compatibility: if no routers match (or none are configured), the system seamlessly falls back to the legacy priority classifier and global server pool.
+
+---
+
 ## Request Lifecycle
 
 ```
 1. Client sends HTTP request to :8080
        │
-2. proxy.ServeHTTP() receives request
+2. entrypoint triggers top-level router manager
        │
-3. priority.Classify(path, header) → "HIGH" or "LOW"
+3. Evaluate requests against configured rule routers
+       ├── If match: apply router middlewares, select target service pool
+       └── If no match: use legacy global server pool
+       │
+4. priority.Classify(path, header) → "HIGH" or "LOW"
        │
 4. router.Select(priority)
        ├── metrics.Snapshot() → get fresh stats
@@ -440,23 +465,45 @@ Edit `config/config.json`:
     "web": { "address": ":8080", "protocol": "http", "middlewares": ["headers", "cors", "rate-limit"] },
     "dashboard": { "address": ":8081", "protocol": "http", "middlewares": ["basic-auth"] }
   },
+  "routers": {
+    "payment-router": {
+      "rule": "PathPrefix('/api/payment') || PathPrefix('/api/checkout')",
+      "priority": 100,
+      "middlewares": ["rate-limit", "cors"],
+      "service": "fast-backends"
+    },
+    "default-router": {
+      "rule": "PathPrefix('/')",
+      "priority": 1,
+      "service": "all-backends"
+    }
+  },
+  "services": {
+    "fast-backends": {
+      "servers": [
+        { "url": "http://localhost:8001", "name": "Alpha-Fast", "weight": 5 }
+      ]
+    },
+    "all-backends": {
+      "servers": [
+        { "url": "http://localhost:8002", "name": "Beta-All", "weight": 3 },
+        { "url": "http://localhost:8003", "name": "Gamma-All", "weight": 1 }
+      ]
+    }
+  },
   "algorithm": "weighted",
   "health_interval_sec": 5,
   "breaker_threshold": 3,
   "breaker_timeout_sec": 15,
-  "metrics_interval_sec": 10,
-  "servers": [
-    { "url": "http://localhost:8001", "name": "Alpha",  "weight": 5, "delay_ms": 15  },
-    { "url": "http://localhost:8002", "name": "Beta",   "weight": 3, "delay_ms": 50  },
-    { "url": "http://localhost:8003", "name": "Gamma",  "weight": 1, "delay_ms": 100 },
-    { "url": "http://localhost:8004", "name": "Delta",  "weight": 4, "delay_ms": 20  }
-  ]
+  "metrics_interval_sec": 10
 }
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `entrypoints` | auto | Named entrypoints (see [Entrypoints](#entrypoints)) |
+| `routers` | — | Named routing rules matching requests to target services |
+| `services` | — | Named backend server pools for explicit routing |
 | `listen_port` | 8080 | Legacy: port for the reverse proxy (used if no `entrypoints`) |
 | `dashboard_port` | 8081 | Legacy: port for the dashboard (used if no `entrypoints`) |
 | `algorithm` | `weighted` | Routing algorithm: `weighted`, `roundrobin`, `leastconn`, or `canary` |
