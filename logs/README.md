@@ -1,4 +1,4 @@
-# `logs/` — Log Files Directory
+ins# `logs/` — Log Files Directory
 
 This directory is the default location for the Intelligent Load Balancer's structured access logs. 
 
