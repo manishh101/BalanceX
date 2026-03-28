@@ -77,16 +77,17 @@
 
     /* Navbar */
     .navbar {
-      background: rgba(10, 14, 26, 0.95);
-      backdrop-filter: blur(20px);
+      background: linear-gradient(to right, rgba(10, 14, 26, 0.98), rgba(17, 21, 38, 0.95));
+      backdrop-filter: blur(24px);
       border-bottom: 1px solid var(--glass-border);
       display: flex;
       align-items: center;
-      padding: 0 32px;
-      height: 60px;
+      padding: 0 40px;
+      height: 70px;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 1000;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
 
     .logo {
@@ -100,24 +101,14 @@
     }
 
     .logo-icon {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background: linear-gradient(135deg, var(--accent), #00b4d8, var(--accent2));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      font-family: var(--mono);
-      font-size: 20px;
-      font-weight: 700;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -1px;
     }
 
-    .logo-ver {
-      font-size: 10px;
-      background: rgba(255, 255, 255, 0.06);
-      padding: 3px 8px;
-      border-radius: 6px;
-      color: var(--text-dim);
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      -webkit-text-fill-color: initial;
-    }
 
     .nav-tabs {
       display: flex;
@@ -266,47 +257,12 @@
       background: var(--bg-card);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius);
-      padding: 20px 24px;
+      padding: 24px;
       position: relative;
       overflow: hidden;
       transition: all .3s;
     }
 
-    .kpi-card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(255, 255, 255, 0.1);
-      box-shadow: var(--glass-shadow);
-    }
-
-    .kpi-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      border-radius: var(--radius) var(--radius) 0 0;
-    }
-
-    .kpi-card:nth-child(1)::before {
-      background: linear-gradient(90deg, var(--accent), #00b4d8);
-    }
-
-    .kpi-card:nth-child(2)::before {
-      background: linear-gradient(90deg, #22c55e, #86efac);
-    }
-
-    .kpi-card:nth-child(3)::before {
-      background: linear-gradient(90deg, var(--accent2), #818cf8);
-    }
-
-    .kpi-card:nth-child(4)::before {
-      background: linear-gradient(90deg, var(--accent3), #fbbf24);
-    }
-
-    .kpi-card:nth-child(5)::before {
-      background: linear-gradient(90deg, #ec4899, #f472b6);
-    }
 
     .kpi-label {
       font-size: 11px;
@@ -724,8 +680,7 @@
 <body>
   <nav class="navbar">
     <div class="logo">
-      <span class="logo-icon">⚡ ILB</span> <span style="color:var(--text-bright)">Dashboard</span> <span
-        class="logo-ver">v2.0</span>
+      <span class="logo-icon">ILB</span> <span style="color:var(--text-bright); font-weight: 600;">Dashboard</span>
     </div>
     <ul class="nav-tabs" id="mainTabs">
       <li><button class="active" data-target="dashboard">Dashboard</button></li>

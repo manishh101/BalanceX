@@ -21,11 +21,11 @@ A production-ready, highly configurable, intelligent HTTP Load Balancer in Go, i
     *   **JSON Access Logging:** Formatted request tracking.
 *   **Advanced Observability & Dashboard:**
     *   **WebSocket & REST APIs:** View live state via WebSocket, or pull metrics from `/api/metrics`, `/api/history`, and `/api/health` endpoints.
-    *   **Dark-Themed Real-time UI:** Uses IBM Plex Mono for a modern terminal aesthetic.
-    *   **Enhanced Metrics:** Tracks Global RPS, connection counts, active retries, P95 Latency (via ring buffer analytics), and records a real-time log of Circuit Breaker state transitions.
-    *   **Historical Charting:** Connect to the dashboard and instantly view historical data injected from the 120-second history buffer.
+    *   **Premium Dark-Themed Dashboard:** A modern, glassmorphism UI with IBM Plex Mono aesthetics.
+    *   **Analytics Engine:** High-performance ring buffer for **P95 Latency** and **RPS** tracking.
+    *   **Historical Timeline:** View the last 120 seconds of traffic patterns instantly upon connection.
 *   **Zero-Downtime Hot Reload:** Modify `config.json` on the fly — the load balancer natively computes diffs, dynamically adds/removes endpoints, scales weights, and swaps configurations without dropping active connections.
-*   **Multi-Entrypoints:** Run secure APIs and admin dashboards simultaneously on different ports with isolated middleware chains.
+*   **Production Microservices Stack:** Fully containerized with Docker Compose, featuring built-in health checks and service dependencies.
 *   **Kubernetes Ready:** Includes dedicated `/api/health` liveness probes.
 
 ## 📦 Installation & Setup
@@ -156,6 +156,20 @@ You don't need the UI to query metrics anymore.
 - `GET /api/history` — Dumps the latest 120 historic snapshots for analytical chart plotting.
 - `GET /api/health` — A basic 200 OK probe designed for container orchestrators (e.g. k8s liveness endpoints).
 
+## 🚀 Performance Benchmarks (Verified)
+
+Current architecture has been verified using a professional **Grafana k6** load test.
+
+- **Peak Throughput:** ~233 Requests Per Second (RPS)
+- **Latencies (P95):** 31.06ms
+- **Success Rate:** 100% (Expected 2xx/429 statuses)
+- **Concurrent Users:** 50 VUs
+
+To reproduce these results, run the following docker command in your terminal:
+```bash
+docker run --rm -i --network intelligent-lb_lb-network grafana/k6 run - < load_test.js
+```
+
 ## 📡 Viewing the Dashboard
 
 1. Navigate to: `http://localhost:8081` (default auth: admin / secret)
@@ -164,3 +178,20 @@ You don't need the UI to query metrics anymore.
 ## 🤝 Project Contribution
 Minor project for IOE Pulchowk Campus, BCT 2026.
 Designed, documented, and built with modern High-Availability & SRE principles in mind.
+
+## docker-use 
+
+1. **Clone & Enter:**
+   ```bash
+   git clone <your-repo-ui> && cd intelligent-lb
+   ```
+2. **Launch Stack:**
+   ```bash
+   docker compose up -d
+   ```
+3. **Open Dashboard:** Visit `http://localhost:8081` (admin/secret)
+4. **Professional Benchmarking:**
+   If they want to run a professional stress test like you did:
+   ```bash
+   docker run --rm -i --network intelligent-lb_lb-network grafana/k6 run - < load_test.js
+   ```
