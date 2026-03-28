@@ -121,6 +121,17 @@
   },
   "services": {
     "fast-backends": {
+      "canary": false,
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 5,
+        "timeout_sec": 2,
+        "expected_status": 200
+      },
+      "circuit_breaker": {
+        "threshold": 3,
+        "recovery_timeout_sec": 15
+      },
       "servers": [
         {
           "url": "http://localhost:8001",
@@ -130,6 +141,16 @@
       ]
     },
     "admin-backends": {
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 10,
+        "timeout_sec": 3,
+        "expected_status": 200
+      },
+      "circuit_breaker": {
+        "threshold": 3,
+        "recovery_timeout_sec": 15
+      },
       "servers": [
         {
           "url": "http://localhost:8002",
@@ -139,6 +160,16 @@
       ]
     },
     "all-backends": {
+      "health_check": {
+        "path": "/health",
+        "interval_sec": 5,
+        "timeout_sec": 2,
+        "expected_status": 200
+      },
+      "circuit_breaker": {
+        "threshold": 3,
+        "recovery_timeout_sec": 15
+      },
       "servers": [
         {
           "url": "http://localhost:8003",
@@ -152,55 +183,5 @@
         }
       ]
     }
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8001",
-      "name": "Alpha",
-      "weight": 5,
-      "delay_ms": 15,
-      "health_check": {
-        "path": "/health",
-        "interval_sec": 5,
-        "timeout_sec": 2,
-        "expected_status": 200
-      }
-    },
-    {
-      "url": "http://localhost:8002",
-      "name": "Beta",
-      "weight": 3,
-      "delay_ms": 50,
-      "health_check": {
-        "path": "/health",
-        "interval_sec": 10,
-        "timeout_sec": 3,
-        "expected_status": 200
-      }
-    },
-    {
-      "url": "http://localhost:8003",
-      "name": "Gamma",
-      "weight": 1,
-      "delay_ms": 100,
-      "health_check": {
-        "path": "/health",
-        "interval_sec": 15,
-        "timeout_sec": 2,
-        "expected_status": 200
-      }
-    },
-    {
-      "url": "http://localhost:8004",
-      "name": "Delta",
-      "weight": 4,
-      "delay_ms": 20,
-      "health_check": {
-        "path": "/health",
-        "interval_sec": 5,
-        "timeout_sec": 2,
-        "expected_status": 200
-      }
-    }
-  ]
+  }
 }
