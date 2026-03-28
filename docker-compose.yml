@@ -71,7 +71,7 @@ services:
       test: ["CMD", "wget", "-qO-", "http://localhost:8004/health"]
       interval: 5s
       timeout: 2s
-      retries: 3
+      retries: 3 
 
   loadbalancer:
     build:
@@ -93,3 +93,18 @@ services:
         condition: service_healthy
       delta:
         condition: service_healthy
+    volumes:
+      - ./web:/app/web
+      - ./logs:/app/logs
+
+  traffic-gen:
+    image: grafana/k6
+    container_name: traffic-gen
+    volumes:
+      - ./:/src
+    command: run /src/traffic_generator_v2.js
+    networks:
+      - lb-network
+    depends_on:
+      - loadbalancer
+    restart: always

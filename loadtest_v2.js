@@ -58,19 +58,13 @@ export default function () {
   // 4. Test Dashboard (Basic Auth)
   group('Dashboard Auth', () => {
     // Correct Auth
-    let authHeader = 'Basic ' + Buffer.from('admin:loadbalancer').toString('base64');
-    let resDash = http.get(`${DASHBOARD_URL}/`, {
-      headers: { 'Authorization': authHeader },
-    });
+    let resDash = http.get(`${DASHBOARD_URL}/`, { auth: 'admin:loadbalancer' });
     check(resDash, {
       'dashboard (correct auth) is 200': (r) => r.status === 200,
     });
 
     // Wrong Auth
-    let wrongAuth = 'Basic ' + Buffer.from('admin:wrong').toString('base64');
-    let resDashFail = http.get(`${DASHBOARD_URL}/`, {
-      headers: { 'Authorization': wrongAuth },
-    });
+    let resDashFail = http.get(`${DASHBOARD_URL}/`, { auth: 'admin:wrong' });
     check(resDashFail, {
       'dashboard (wrong auth) is 401': (r) => r.status === 401,
     });
